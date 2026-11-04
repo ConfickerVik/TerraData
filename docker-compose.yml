@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  terradata-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: terradata_service
+    volumes:
+      # Монтируем локальную папку data в контейнер для сохранения отчетов и чтения XML
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Europe/Moscow
+    restart: unless-stopped
+    # Если в будущем добавите API (FastAPI), раскомментируйте порты:
+    ports:
+      - "8000:8000"

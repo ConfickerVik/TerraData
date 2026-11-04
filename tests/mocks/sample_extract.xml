@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extract_about_property_build>
+    <details_statement>
+        <group_top_requisites>
+            <organ_registr_rights>Филиал ППК "Роскадастр" по Иркутской области</organ_registr_rights>
+            <date_formation>2024-11-03</date_formation>
+            <registration_number>ИРК-001/2024-TEST-001</registration_number>
+        </group_top_requisites>
+    </details_statement>
+    <build_record>
+        <record_info>
+            <registration_date>2019-01-01T12:00:00+00:00</registration_date>
+        </record_info>
+        <object>
+            <common_data>
+                <cad_number>38:00:000000:00001</cad_number>
+                <quarter_cad_number>38:00:000000</quarter_cad_number>
+                <type>
+                    <code>002001003000</code>
+                    <value>Квартира</value>
+                </type>
+            </common_data>
+        </object>
+        <params>
+            <area>44.80</area>
+            <floors>5</floors>
+            <purpose>
+                <code>206002000000</code>
+                <value>Жилое помещение</value>
+            </purpose>
+        </params>
+        <address_location>
+            <address>
+                <readable_address>Российская Федерация, Продовая область, г.о. город Прод, г. Прод, ул. Тестовая, д. 01, кв. 02</readable_address>
+            </address>
+        </address_location>
+    </build_record>
+</extract_about_property_build>

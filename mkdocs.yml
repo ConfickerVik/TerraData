@@ -1,0 +1,22 @@
+site_name: TerraData Documentation
+site_description: Documentation for TerraData API - Rosreestr data extraction and PDF conversion.
+site_url: http://127.0.0.1:8000/docs
+
+theme:
+  name: material
+
+nav:
+  - Главная: index.md
+  - Начало работы:
+      - Установка: installation.md
+      - Быстрый старт: quickstart.md
+  - Справочник API:
+      - API Росреестра: rosreestr_api.md
+      - API Конвертера: converter_api.md
+  - Технические детали:
+      - Архитектура: architecture.md
+      - ML Модель: ml_model.md
+      - Конвертация PDF: pdf_conversion.md
+
+plugins:
+  - search
