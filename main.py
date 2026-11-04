@@ -1,0 +1,27 @@
+from fastapi import FastAPI
+from app.api import rosreestr, converter
+
+app = FastAPI(
+    title="TerraData API",
+    description="API for Rosreestr data extraction and XML to PDF conversion",
+    version="1.0.0"
+)
+
+# Include routers
+app.include_router(rosreestr.router)
+app.include_router(converter.router)
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to TerraData API",
+        "docs": "/docs",
+        "endpoints": {
+            "rosreestr": "/rosreestr",
+            "converter": "/converter"
+        }
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,45 @@
+{
+    "elements": [
+        {
+            "cadNumber": "38:00:000000:00001",
+            "cadQuarter": "38:00:000000",
+            "status": "1",
+            "objType": "002001003000",
+            "area": "44.80",
+            "address": {
+                "region": "Продовая область",
+                "district": "город Прод",
+                "city": "Прод",
+                "cityType": "г.",
+                "readableAddress": "Российская Федерация, Продовая область, г.о. город Прод, г. Прод, ул. Тестовая, д. 01, кв. 02"
+            },
+            "regDate": 1380499200000,
+            "rights": [
+                {
+                    "rightTypeDesc": "Собственность",
+                    "rightRegDate": 1576195200000,
+                    "rightNumber": "38:00:000000:00001-38/119/2019-2"
+                }
+            ],
+            "encumbrances": [
+                {
+                    "typeDesc": "Ипотека в силу закона",
+                    "startDate": 1576195200000,
+                    "encumbranceNumber": "38:00:000000:00001-38/119/2019-3"
+                }
+            ],
+            "cadCost": "3269726.66",
+            "cadCostDeterminationDate": 1672531200000,
+            "infoUpdateDate": 1784851200000,
+            "levelFloor": "5",
+            "mainCharacters": [
+                {
+                    "description": "Площадь",
+                    "value": 44.80,
+                    "unitDescription": "кв.м"
+                }
+            ]
+        }
+    ],
+    "count": 1
+}
