@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import rosreestr, converter, nspd, fias
+from app.api import rosreestr, converter, nspd, fias, sudrf
 
 app = FastAPI(
     title="TerraData API",
@@ -12,6 +12,7 @@ app.include_router(rosreestr.router)
 app.include_router(converter.router)
 app.include_router(nspd.router)
 app.include_router(fias.router)
+app.include_router(sudrf.router)
 
 @app.get("/")
 async def root():
@@ -23,7 +24,8 @@ async def root():
             "rosreestr": "/rosreestr",
             "converter": "/converter",
             "nspd": "/nspd",
-            "fias": "/fias"
+            "fias": "/fias",
+            "sudrf": "/sudrf"
         }
     }
 

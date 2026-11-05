@@ -2,6 +2,7 @@ import httpx
 import json
 import logging
 from typing import List, Dict, Optional, Any
+from app.services.address_cleaner import AddressCleaner
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,13 @@ class FIASClient:
         Получение списка всех подходящих вариантов адресов (подсказок).
         Возвращает список словарей с object_id и текстовым представлением.
         """
+        # Очищаем адрес перед запросом в ФИАС
+        cleaned_address = AddressCleaner.clean(address)
+        if not cleaned_address:
+            return []
+            
         url = f"{self.base_url_public}/GetAddressHint"
-        payload = {"searchString": address, "addressType": 2, "searchNonActive": False}
+        payload = {"searchString": cleaned_address, "addressType": 2, "searchNonActive": False}
         token = self.get_master_token()
         if not token:
             return []
@@ -98,3 +104,9 @@ class FIASClient:
     def search_fias_by_address_id(self, object_id: str, address_type: int = 1):
         """Поиск детальной информации по конкретному ID, полученному из подсказок."""
         return self.get_info_by_object_id(object_id, address_type)
+
+    def search_fias_by_address(self, address: str, address_type: int = 1):
+        clean_address = AddressCleaner.clean(address)
+        if clean_address:
+            hints = self.get_address_hints(clean_address)
+            return hints[0] if hints else None
