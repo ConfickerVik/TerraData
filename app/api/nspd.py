@@ -8,7 +8,7 @@ router = APIRouter(prefix="/nspd", tags=["NSPD Data"])
 
 nspd_client = NspdClient()
 
-@router.get("/cadastral-price/{cad_num}")
+@router.get("/cadastral-price")
 async def get_cadastral_price(cad_num: str):
     """
     Запрос только кадастровой стоимости и базовых сведений об объекте.
@@ -19,7 +19,7 @@ async def get_cadastral_price(cad_num: str):
         raise HTTPException(status_code=404, detail="Сведения о кадастровой стоимости в НСПД не найдены")
     return data
 
-@router.get("/property/{cad_num}")
+@router.get("/property")
 async def get_full_property_data(cad_num: str):
     """
     Сбор всех доступных сведений об объекте недвижимости из НСПД по кадастровому номеру.

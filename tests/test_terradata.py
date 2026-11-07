@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -225,26 +225,26 @@ def test_address_cleaner_removes_building_marker():
 from app.services.fias_client import FIASClient
 
 
-@patch("httpx.Client.get")
-def test_fias_get_token_success(mock_get):
+@patch("httpx.AsyncClient.get")
+async def test_fias_get_token_success(mock_get):
     mock_get.return_value.status_code = 200
     mock_get.return_value.text = '{"Token": "test_token"}'
     fias = FIASClient()
-    assert fias.get_master_token() == "test_token"
+    assert await fias.get_master_token() == "test_token"
 
 
-@patch("httpx.Client.get")
-def test_fias_get_token_fail(mock_get):
+@patch("httpx.AsyncClient.get")
+async def test_fias_get_token_fail(mock_get):
     mock_get.return_value.status_code = 500
     fias = FIASClient()
-    assert fias.get_master_token() is None
+    assert await fias.get_master_token() is None
 
 
 @patch.object(FIASClient, "get_master_token", return_value=None)
-def test_fias_get_address_hints_empty_without_token(mock_token):
+async def test_fias_get_address_hints_empty_without_token(mock_token):
     """Без мастер-токена подсказки не запрашиваются."""
     fias = FIASClient()
-    assert fias.get_address_hints("г. Иркутск") == []
+    assert await fias.get_address_hints("г. Иркутск") == []
 
 
 # =============================================================================
@@ -254,30 +254,30 @@ def test_fias_get_address_hints_empty_without_token(mock_token):
 from app.services.sudrf_client import SudrfClient
 
 
-@patch("httpx.Client.get")
-def test_sudrf_get_court_success(mock_get):
+@patch("httpx.AsyncClient.get")
+async def test_sudrf_get_court_success(mock_get):
     mock_get.return_value.status_code = 200
     mock_get.return_value.text = '{"list": [{"VNKOD": "12MS0000", "ZNACHATR": "Судебный участок №1"}]}'
     sudrf = SudrfClient()
-    res = sudrf.get_court_by_fias_id("some_guid")
+    res = await sudrf.get_court_by_fias_id("some_guid")
     assert res["court_name"] == "Судебный участок №1"
 
 
-@patch("httpx.Client.get")
-def test_sudrf_get_court_empty_list(mock_get):
+@patch("httpx.AsyncClient.get")
+async def test_sudrf_get_court_empty_list(mock_get):
     """Пустой список судов -> None."""
     mock_get.return_value.status_code = 200
     mock_get.return_value.text = '{"list": []}'
     sudrf = SudrfClient()
-    assert sudrf.get_court_by_fias_id("some_guid") is None
+    assert await sudrf.get_court_by_fias_id("some_guid") is None
 
 
-@patch("httpx.Client.post")
-def test_sudrf_get_fias_id_by_address_success(mock_post):
+@patch("httpx.AsyncClient.post")
+async def test_sudrf_get_fias_id_by_address_success(mock_post):
     mock_post.return_value.status_code = 200
     mock_post.return_value.text = '{"suggestions": [{"data": {"fias_id": "guid_123"}}]}'
     sudrf = SudrfClient()
-    assert sudrf.get_fias_id_by_address("some address") == "guid_123"
+    assert await sudrf.get_fias_id_by_address("some address") == "guid_123"
 
 
 # =============================================================================
@@ -299,22 +299,22 @@ def test_nspd_get_category_id():
 from app.api.rosreestr import client as rr_client
 
 
-@patch.object(rr_client, "get_full_info", return_value={"elements": [{"cadNumber": "38:00:000000:00001", "area": "44.80"}]})
+@patch.object(rr_client, "get_full_info", new_callable=AsyncMock, return_value={"elements": [{"cadNumber": "38:00:000000:00001", "area": "44.80"}]})
 def test_rosreestr_info_mock(mocked_method):
-    response = client.get("/rosreestr/info/38:00:000000:00001")
+    response = client.get("/rosreestr/info?cad_num=38:00:000000:00001")
     assert response.status_code == 200
     assert response.json()["elements"][0]["cadNumber"] == "38:00:000000:00001"
     mocked_method.assert_called_once_with("38:00:000000:00001")
 
 
-@patch.object(rr_client, "get_full_info", return_value=None)
+@patch.object(rr_client, "get_full_info", new_callable=AsyncMock, return_value=None)
 def test_rosreestr_info_not_found(mocked_method):
-    response = client.get("/rosreestr/info/00:00:000000:00000")
+    response = client.get("/rosreestr/info?cad_num=00:00:000000:00000")
     assert response.status_code == 404
     mocked_method.assert_called_once()
 
 
-@patch.object(rr_client, "search_by_address", return_value={"results": ["38:00:000000:00001"]})
+@patch.object(rr_client, "search_by_address", new_callable=AsyncMock, return_value={"results": ["38:00:000000:00001"]})
 def test_rosreestr_search_address_mock(mocked_method):
     response = client.get("/rosreestr/search-address?address=ул. Тестовая")
     assert response.status_code == 200
@@ -322,7 +322,7 @@ def test_rosreestr_search_address_mock(mocked_method):
     mocked_method.assert_called_once_with("ул. Тестовая")
 
 
-@patch.object(rr_client, "search_by_address", return_value=None)
+@patch.object(rr_client, "search_by_address", new_callable=AsyncMock, return_value=None)
 def test_rosreestr_search_address_not_found(mocked_method):
     response = client.get("/rosreestr/search-address?address=нет такого адреса")
     assert response.status_code == 404
@@ -385,16 +385,16 @@ def test_converter_xml_to_pdf_wrong_extension():
 from app.api.nspd import nspd_client
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value={"data": {"features": [{"properties": {"category": 36369}}]}})
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value={"data": {"features": [{"properties": {"category": 36369}}]}})
 def test_nspd_cadastral_price_mock(mocked_method):
-    response = client.get("/nspd/cadastral-price/38:00:000000:00001")
+    response = client.get("/nspd/cadastral-price?cad_num=38:00:000000:00001")
     assert response.status_code == 200
     assert response.json() == {"data": {"features": [{"properties": {"category": 36369}}]}}
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=None)
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None)
 def test_nspd_cadastral_price_not_found(mocked_method):
-    response = client.get("/nspd/cadastral-price/00:00:000000:00000")
+    response = client.get("/nspd/cadastral-price?cad_num=00:00:000000:00000")
     assert response.status_code == 404
 
 
@@ -417,14 +417,14 @@ BASE_INFO_BUILDING = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=BASE_INFO_BUILDING)
-@patch.object(nspd_client, "get_objects_list", return_value={"rooms": 10})
-@patch.object(nspd_client, "get_land_links", return_value={"land": "OK"})
-@patch.object(nspd_client, "get_build_parts", return_value={"parts": "OK"})
-@patch.object(nspd_client, "get_permission_types", return_value={"perm": "OK"})
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_BUILDING)
+@patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock, return_value={"rooms": 10})
+@patch.object(nspd_client, "get_land_links", new_callable=AsyncMock, return_value={"land": "OK"})
+@patch.object(nspd_client, "get_build_parts", new_callable=AsyncMock, return_value={"parts": "OK"})
+@patch.object(nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"perm": "OK"})
 def test_nspd_full_property_building_comprehensive(*_):
     """Глубокий тест для Здания: проверка всей цепочки и нормализации геометрии"""
-    response = client.get("/nspd/property/38:36:000000:111")
+    response = client.get("/nspd/property?cad_num=38:36:000000:111")
     assert response.status_code == 200
     data = response.json()
 
@@ -453,14 +453,14 @@ BASE_INFO_LAND = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=BASE_INFO_LAND)
-@patch.object(nspd_client, "get_land_objects_list", return_value={"land_objs": "OK"})
-@patch.object(nspd_client, "get_land_permission_types", return_value={"land_perm": "OK"})
-@patch.object(nspd_client, "get_land_parts", return_value={"land_parts": "OK"})
-@patch.object(nspd_client, "get_land_composition", return_value={"land_comp": "OK"})
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_LAND)
+@patch.object(nspd_client, "get_land_objects_list", new_callable=AsyncMock, return_value={"land_objs": "OK"})
+@patch.object(nspd_client, "get_land_permission_types", new_callable=AsyncMock, return_value={"land_perm": "OK"})
+@patch.object(nspd_client, "get_land_parts", new_callable=AsyncMock, return_value={"land_parts": "OK"})
+@patch.object(nspd_client, "get_land_composition", new_callable=AsyncMock, return_value={"land_comp": "OK"})
 def test_nspd_full_property_land_comprehensive(*_):
     """Глубокий тест для Земельного участка: проверка всех специфичных полей"""
-    response = client.get("/nspd/property/38:36:000000:222")
+    response = client.get("/nspd/property?cad_num=38:36:000000:222")
     assert response.status_code == 200
     data = response.json()
     assert data["base_info"] == BASE_INFO_LAND
@@ -483,11 +483,11 @@ BASE_INFO_PREMISES = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=BASE_INFO_PREMISES)
-@patch.object(nspd_client, "get_objects_list")
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_PREMISES)
+@patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock)
 def test_nspd_full_property_premises_mock(mock_details, *_):
     """Тест получения данных для Помещения (37163) - детали не должны запрашиваться"""
-    response = client.get("/nspd/property/38:36:000000:333")
+    response = client.get("/nspd/property?cad_num=38:36:000000:333")
     assert response.status_code == 200
     data = response.json()
     assert data["details"] is None
@@ -510,23 +510,23 @@ BASE_INFO_CHAIN = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=BASE_INFO_CHAIN)
-@patch.object(nspd_client, "get_objects_list", return_value=None)
-@patch.object(nspd_client, "get_land_links", return_value={"ok": True})
-@patch.object(nspd_client, "get_build_parts", return_value={"ok": True})
-@patch.object(nspd_client, "get_permission_types", return_value={"ok": True})
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_CHAIN)
+@patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock, return_value=None)
+@patch.object(nspd_client, "get_land_links", new_callable=AsyncMock, return_value={"ok": True})
+@patch.object(nspd_client, "get_build_parts", new_callable=AsyncMock, return_value={"ok": True})
+@patch.object(nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"ok": True})
 def test_nspd_api_failure_during_chain(*_):
     """Тест поведения при ошибке в одном из параллельных запросов деталей"""
-    response = client.get("/nspd/property/38:36:000000:111")
+    response = client.get("/nspd/property?cad_num=38:36:000000:111")
     assert response.status_code == 200
     data = response.json()
     assert data["details"]["objects_list"] is None
     assert data["details"]["land_links"] == {"ok": True}
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", return_value=None)
+@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None)
 def test_nspd_full_property_not_found(mocked_method):
-    response = client.get("/nspd/property/00:00:000000:00000")
+    response = client.get("/nspd/property?cad_num=00:00:000000:00000")
     assert response.status_code == 404
 
 
@@ -537,15 +537,15 @@ def test_nspd_full_property_not_found(mocked_method):
 from app.api.fias import fias_client as api_fias_client
 
 
-@patch.object(api_fias_client, "search_fias_by_cadastral", return_value=None)
-def test_fias_by_cadastral_not_found(mocked_method):
+@patch.object(api_fias_client, "search_fias_by_cadastral", new=AsyncMock(return_value=None))
+def test_fias_by_cadastral_not_found():
     response = client.get("/fias/by-cadastral/000:00:0000")
     assert response.status_code == 404
     assert "не найдены" in response.json()["detail"]
 
 
-@patch.object(api_fias_client, "get_address_hints", return_value=[])
-def test_fias_search_address_not_found(mocked_method):
+@patch.object(api_fias_client, "get_address_hints", new=AsyncMock(return_value=[]))
+def test_fias_search_address_not_found():
     response = client.get("/fias/search-address?address=нет такого адреса")
     assert response.status_code == 404
 
@@ -556,14 +556,14 @@ def test_fias_search_address_empty():
     assert response.status_code == 400
 
 
-@patch.object(api_fias_client, "search_fias_by_address_id", return_value=None)
-def test_fias_by_object_id_not_found(mocked_method):
+@patch.object(api_fias_client, "search_fias_by_address_id", new=AsyncMock(return_value=None))
+def test_fias_by_object_id_not_found():
     response = client.get("/fias/by-object-id/000000")
     assert response.status_code == 404
 
 
-@patch.object(api_fias_client, "get_object_id_by_cadastral_number", return_value=None)
-def test_fias_object_id_not_found(mocked_method):
+@patch.object(api_fias_client, "get_object_id_by_cadastral_number", new=AsyncMock(return_value=None))
+def test_fias_object_id_not_found():
     response = client.get("/fias/object-id/000:00:0000")
     assert response.status_code == 404
 
@@ -573,9 +573,9 @@ def test_fias_object_id_not_found(mocked_method):
 # =============================================================================
 
 
-@patch("app.api.sudrf.fias_client.search_fias_by_cadastral")
-@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id")
-@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address")
+@patch("app.api.sudrf.fias_client.search_fias_by_cadastral", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address", new_callable=AsyncMock)
 def test_api_by_cadastral_full_success(mock_fias_id_by_address, mock_get_court, mock_fias):
     """Успешный путь: GUID дома найден, суд определяется напрямую, fallback не нужен."""
     mock_fias.return_value = {
@@ -596,9 +596,9 @@ def test_api_by_cadastral_full_success(mock_fias_id_by_address, mock_get_court, 
     mock_fias_id_by_address.assert_not_called()
 
 
-@patch("app.api.sudrf.fias_client.search_fias_by_cadastral")
-@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id")
-@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address")
+@patch("app.api.sudrf.fias_client.search_fias_by_cadastral", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address", new_callable=AsyncMock)
 def test_api_by_cadastral_fallback_success(mock_fias_id_by_address, mock_get_court, mock_fias):
     """Fallback-путь: GUID дома не найден, суд ищется по адресу через СУДРФ."""
     mock_fias.return_value = {
@@ -619,8 +619,8 @@ def test_api_by_cadastral_fallback_success(mock_fias_id_by_address, mock_get_cou
     mock_get_court.assert_called_with("fallback_guid")
 
 
-@patch("app.api.sudrf.fias_client.search_fias_by_cadastral")
-@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address")
+@patch("app.api.sudrf.fias_client.search_fias_by_cadastral", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_fias_id_by_address", new_callable=AsyncMock)
 def test_api_by_cadastral_not_found(mock_fias_id_by_address, mock_fias):
     """Нет ни ФИАС-данных, ни fallback-результата -> 404."""
     mock_fias.return_value = {"addresses": []}
@@ -632,8 +632,8 @@ def test_api_by_cadastral_not_found(mock_fias_id_by_address, mock_fias):
     assert "fallback-поиск не дал результата" in response.json()["detail"]
 
 
-@patch("app.api.fias.fias_client.search_fias_by_address_id")
-@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id")
+@patch("app.api.fias.fias_client.search_fias_by_address_id", new_callable=AsyncMock)
+@patch("app.api.sudrf.sudrf_client.get_court_by_fias_id", new_callable=AsyncMock)
 def test_api_by_object_id_success(mock_get_court, mock_fias):
     mock_fias.return_value = {
         "addresses": [

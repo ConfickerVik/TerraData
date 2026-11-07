@@ -77,7 +77,7 @@ docker compose up --build
 ### Данные Росреестра
 | Эндпоинт | Метод | Описание |
 | :--- | :--- | :--- |
-| `/rosreestr/info/{cad_num}` | `GET` | Получение полной информации по кадастровому номеру |
+| `/rosreestr/info` | `GET` | Получение полной информации по кадастровому номеру |
 | `/rosreestr/search-address` | `GET` | Поиск кадастровых номеров по адресу |
 
 ### Конвертер PDF
@@ -88,8 +88,8 @@ docker compose up --build
 ### Данные НСПД
 | Эндпоинт | Метод | Описание |
 | :--- | :--- | :--- |
-| `/nspd/cadastral-price/{cad_num}` | `GET` | Кадастровая стоимость и базовые сведения об объекте |
-| `/nspd/property/{cad_num}` | `GET` | Полные сведения об объекте (здание, ЗУ или помещение) |
+| `/nspd/cadastral-price` | `GET` | Кадастровая стоимость и базовые сведения об объекте |
+| `/nspd/property` | `GET` | Полные сведения об объекте (здание, ЗУ или помещение) |
 | `/nspd/details/objects-list` | `GET` | Список объектов здания |
 | `/nspd/details/land-links` | `GET` | Связи объекта с земельными участками |
 | `/nspd/details/build-parts` | `GET` | Части здания |
@@ -98,10 +98,10 @@ docker compose up --build
 ### Данные ФИАС
 | Эндпоинт | Метод | Описание |
 | :--- | :--- | :--- |
-| `/fias/by-cadastral/{cad_num}` | `GET` | Сведения ФИАС по кадастровому номеру |
+| `/fias/by-cadastral` | `GET` | Сведения ФИАС по кадастровому номеру |
 | `/fias/search-address` | `GET` | Подсказки вариантов адреса в ФИАС |
-| `/fias/by-object-id/{object_id}` | `GET` | Детальные сведения по ObjectID ФИАС |
-| `/fias/object-id/{cad_num}` | `GET` | Получение ObjectID ФИАС по кадастровому номеру |
+| `/fias/by-object-id` | `GET` | Детальные сведения по ObjectID ФИАС |
+| `/fias/object-id` | `GET` | Получение ObjectID ФИАС по кадастровому номеру |
 
 ### Данные СУДРФ (судебные участки)
 | Эндпоинт | Метод | Описание |
@@ -124,12 +124,15 @@ TerraData/
 ├── docker-compose.yml      # Конфигурация Docker Compose
 ├── main.py                 # Точка входа FastAPI
 ├── requirements.txt        # Зависимости
-└── mkdocs.yml              # Конфигурация документации
+├── mkdocs.yml              # Конфигурация документации
+├── pytest.ini              # Конфигурация pytest
+├── README.md               # Описание проекта
+└── ROADMAP.md              # Дорожная карта проекта
 ```
 
 ## 🧪 Тестирование
 
 Запуск тестов с помощью pytest:
 ```bash
-pytest
+pytest .\tests\test_terradata.py
 ```

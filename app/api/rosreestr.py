@@ -8,7 +8,7 @@ router = APIRouter(prefix="/rosreestr", tags=["Rosreestr Data"])
 converter = RosreestrPdfConverter()
 client = RosreestrClient(pdf_converter=converter)
 
-@router.get("/info/{cad_num}")
+@router.get("/info")
 async def get_property_info(cad_num: str):
     """
     Get full raw information about a property by its cadastral number.
