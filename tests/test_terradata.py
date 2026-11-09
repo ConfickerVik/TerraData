@@ -197,13 +197,25 @@ from app.services.fias_client import FIASClient
 @patch("httpx.AsyncClient.get")
 async def test_fias_get_token_success(mock_get):
     mock_get.return_value.status_code = 200
-    mock_get.return_value.text = '{"Token": "test_token"}'
+    mock_get.return_value.json = MagicMock(return_value={"Token": "test_token"})
     fias = FIASClient()
     assert await fias.get_master_token() == "test_token"
 
 
 @patch("httpx.AsyncClient.get")
-async def test_fias_get_token_fail(mock_get):
+async def test_fias_get_token_cached(mock_get):
+    """Повторный вызов берёт токен из кэша и не ходит в сеть."""
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json = MagicMock(return_value={"Token": "test_token"})
+    fias = FIASClient()
+    assert await fias.get_master_token() == "test_token"
+    assert await fias.get_master_token() == "test_token"
+    mock_get.assert_called_once()
+
+
+@patch("app.services.fias_client.asyncio.sleep")
+@patch("httpx.AsyncClient.get")
+async def test_fias_get_token_fail(mock_get, mock_sleep):
     mock_get.return_value.status_code = 500
     fias = FIASClient()
     assert await fias.get_master_token() is None
