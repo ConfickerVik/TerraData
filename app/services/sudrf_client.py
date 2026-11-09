@@ -3,6 +3,8 @@ import json
 import logging
 from typing import Dict, Optional, Any
 
+from app.services.types.court_types import COURT_TYPE_ORDER
+
 logger = logging.getLogger(__name__)
 
 class SudrfClient:
@@ -18,7 +20,9 @@ class SudrfClient:
         """
         Получение списка судов по FIAS ID (GUID).
         Метод: getCourtListByFiasCode.
-        Фильтрует результаты по коду региона (первые 2 цифры VNKOD).
+
+        Возвращает все суды (мировой участок, районный, областной,
+        апелляционный, кассационный, военные) с их типом и реквизитами.
         """
         url = f"{self.base_url}?opt=court_list&action=getCourtListByFiasCode&fiasId={fias_id}"
 
@@ -26,34 +30,52 @@ class SudrfClient:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
                 response = await session.get(url)
 
-            if response.status_code == 200:
-                content = json.loads(response.text)
-                courts_list = content.get("list", [])
-                if not courts_list:
-                    return None
+            if response.status_code != 200:
+                return None
 
-                # Определяем код региона, если он не передан (берем из первого элемента)
-                if not region_code and courts_list[0].get("VNKOD"):
-                    region_code = courts_list[0]["VNKOD"][:2]
+            content = json.loads(response.text)
+            courts_list = content.get("list", [])
+            if not courts_list:
+                return None
 
-                # Собираем словарь судов, которые относятся к этому региону
-                region_courts = {}
-                for court in courts_list:
-                    vncod = court.get("VNKOD", "")
-                    if vncod.startswith(region_code):
-                        # Используем VNKOD как ключ, ZNACHATR как значение
-                        region_courts[vncod] = court.get("ZNACHATR", "")
+            # Собираем все суды: плоские записи списка + вложенные
+            # вышестоящие суды (KJ, AJ, OS, AV, KV, OV). Дедуплицируем по VNKOD.
+            collected: Dict[str, Dict[str, Any]] = {}
+            for entry in courts_list:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("VNKOD"):
+                    collected[entry["VNKOD"]] = entry
+                for value in entry.values():
+                    if isinstance(value, dict) and value.get("VNKOD"):
+                        collected.setdefault(value["VNKOD"], value)
 
-                if not region_courts:
-                    return None
+            if not collected:
+                return None
 
-                # Возвращаем основной результат (первый из отфильтрованных) и весь список
-                main_court_vncod = list(region_courts.keys())[0]
-                return {
-                    "court_name": region_courts[main_court_vncod],
-                    "vncod": main_court_vncod,
-                    "all_region_courts": region_courts
-                }
+            # Тип суда закодирован в VNKOD (позиции 2-3): MS, RS, OS, AJ, KJ, ...
+            courts = []
+            for vncod, entry in collected.items():
+                courts.append({
+                    "type": vncod[2:4] if len(vncod) >= 4 else vncod,
+                    "vncod": vncod,
+                    "name": entry.get("ZNACHATR", ""),
+                    "address": entry.get("ADDRESS", ""),
+                    "url": entry.get("PRIM", ""),
+                })
+
+            # Порядок вывода: мировой участок -> районный -> областной ->
+            # апелляционный -> кассационный -> военные суды.
+            courts.sort(key=lambda c: COURT_TYPE_ORDER.index(c["type"]) if c["type"] in COURT_TYPE_ORDER else len(COURT_TYPE_ORDER))
+
+            # Основной суд по умолчанию — судебный участок (MS), иначе первый.
+            main_court = next((c for c in courts if c["type"] == "MS"), courts[0])
+
+            return {
+                "court_name": main_court["name"],
+                "vncod": main_court["vncod"],
+                "courts": courts,
+            }
         except Exception as e:
             logger.error(f"Error getting court by fias_id {fias_id}: {e}")
         return None

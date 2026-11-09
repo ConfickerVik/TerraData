@@ -82,8 +82,7 @@ def test_convert_geometry_polygon_structure():
         {"type": "Polygon", "coordinates": polygon}
     )
     assert result["type"] == "Polygon"
-    assert len(result["coordinates"]) == 1
-    assert len(result["coordinates"][0]) == 4
+    assert len(result["coordinates"]) == 4
     assert "center" in result
 
 
@@ -602,7 +601,7 @@ def test_api_by_cadastral_not_found(mock_fias_id_by_address, mock_fias):
     assert "fallback-поиск не дал результата" in response.json()["detail"]
 
 
-@patch("app.api.fias.fias_client.search_fias_by_address_id", new_callable=AsyncMock)
+@patch("app.api.sudrf.fias_client.search_fias_by_address_id", new_callable=AsyncMock)
 @patch("app.api.sudrf.sudrf_client.get_court_by_fias_id", new_callable=AsyncMock)
 def test_api_by_object_id_success(mock_get_court, mock_fias):
     mock_fias.return_value = {

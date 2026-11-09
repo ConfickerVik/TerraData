@@ -14,7 +14,7 @@ class FIASClient:
 
     async def get_master_token(self) -> Optional[str]:
         """Получение мастер токена для доступа к API ФИАС."""
-        url = f"{self.base_url_nalog}/Home/GetSpasSettings?url=https%3A%2F%2Ffias.nalog.ru%2FSearch%2FExtended%23"
+        url = f"{self.base_url_nalog}/Home/GetSpasSettings?url=https%3A%2F%2Ffias.nalog.ru%2F"
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
                 response = await session.get(url)
@@ -29,9 +29,14 @@ class FIASClient:
         """Получение уникального ObjectID по кадастровому номеру."""
         url = f"{self.base_url_nalog}/ExtendedSearch/GetObjectsByCadastralNumber"
         form = {"cadastralNumber": cadastral_number}
+        token = await self.get_master_token()
+        if not token:
+            return None
+
         try:
+            headers = {"master-token": token}
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                response = await session.post(url, data=form)
+                response = await session.post(url, data=form, headers=headers)
             if response.status_code == 200:
                 object_ids = json.loads(response.text).get("ObjectIds", [])
                 return object_ids[0] if object_ids else None
@@ -78,6 +83,10 @@ class FIASClient:
         """
         Получение детальной информации об объекте по его ObjectID.
         address_type: 1 - административное деление, 2 - муниципальное.
+
+        В результат дополнительно добавляется ключ `object_details`
+        (сведения из /Search/ObjectDetails: ReesterNumber, StartDate,
+        UpdateDate и т.д.).
         """
         url = f"{self.base_url_public}/GetAddressItemById?object_id={object_id}&address_type={address_type}"
         token = await self.get_master_token()
@@ -88,10 +97,33 @@ class FIASClient:
             headers = {"master-token": token}
             async with httpx.AsyncClient(timeout=self.timeout) as session:
                 response = await session.get(url, headers=headers)
+            if response.status_code != 200:
+                return None
+            data = json.loads(response.text)
+        except Exception as e:
+            logger.error(f"Error getting info by object ID: {e}")
+            return None
+
+        # Дополнительная информация по объекту недвижимости.
+        details = await self.get_object_details(object_id)
+        if details:
+            data["object_details"] = details
+
+        return data
+
+    async def get_object_details(self, object_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получение дополнительной информации об объекте недвижимости по ObjectID
+        (реестровый номер, даты начала/обновления, федеральный округ и т.д.).
+        """
+        url = f"{self.base_url_nalog}/Search/ObjectDetails?objectId={object_id}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as session:
+                response = await session.get(url)
             if response.status_code == 200:
                 return json.loads(response.text)
         except Exception as e:
-            logger.error(f"Error getting info by object ID: {e}")
+            logger.error(f"Error getting object details: {e}")
         return None
 
     async def search_fias_by_cadastral(self, cadastral_number: str, address_type: int = 1):

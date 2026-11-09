@@ -162,12 +162,13 @@ class ReportService:
         return {
             "general": {
                 "cad_num": obj.get("cadNumber", cad_num),
+                "status": obj.get("status"),
                 "obj_type": obj.get("objType"),
                 "address": address.get("readableAddress"),
                 "area": obj.get("area"),
                 "area_unit": ReportService._extract_area_unit(obj),
                 "floor": obj.get("floor"),
-                "underFloor": obj.get("undergroundFloor"),
+                "under_floor": obj.get("undergroundFloor"),
                 "level_floor": obj.get("levelFloor"),
                 "ownership_type": obj.get("ownershipType"),
                 "oks_wall_material": obj.get("oksWallMaterial"),

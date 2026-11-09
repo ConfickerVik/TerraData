@@ -15,6 +15,7 @@ TerraData — это API-сервис для работы с государст�
 - **НСПД**: кадастровая стоимость и детальные сведения по объектам (здания, земельные участки, помещения) с конвертацией геометрии.
 - **ФИАС**: поиск адресов, получение ObjectID и сведений по кадастровому номеру.
 - **СУДРФ**: определение судебного участка по кадастровому номеру, адресу или ObjectID ФИАС.
+- **Аналитические PDF-отчёты**: агрегация данных из Росреестра, НСПД, ФИАС и СУДРФ в единый PDF-документ по кадастровому номеру.
 - **Современный API**: построен на FastAPI с автоматической генерацией OpenAPI-документации.
 
 ## 🛠 Технологический стек
@@ -23,7 +24,7 @@ TerraData — это API-сервис для работы с государст�
 - **Фреймворк**: [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/)
 - **OCR/ML**: [TensorFlow](https://www.tensorflow.org/) и [Keras](https://keras.io/), OpenCV, Pillow
 - **HTTP-клиент**: [HTTPX](https://www.encode.io/httpx/), [Requests](https://requests.readthedocs.io/)
-- **Генерация PDF**: [pdfkit](https://pypi.org/project/pdfkit/) (требуется `wkhtmltopdf`), [ReportLab](https://pypi.org/project/reportlab/)
+- **Генерация PDF**: [pdfkit](https://pypi.org/project/pdfkit/) (конвертация XML-выписок, требуется `wkhtmltopdf`), [ReportLab](https://pypi.org/project/reportlab/) (аналитические отчёты)
 - **Данные**: [pandas](https://pandas.pydata.org/)
 - **Тестирование**: [pytest](https://docs.pytest.org/), pytest-asyncio
 - **Документация**: [MkDocs](https://www.mkdocs.org/) + Material
@@ -101,7 +102,7 @@ docker compose up --build
 | `/fias/by-cadastral` | `GET` | Сведения ФИАС по кадастровому номеру |
 | `/fias/search-address` | `GET` | Подсказки вариантов адреса в ФИАС |
 | `/fias/by-object-id` | `GET` | Детальные сведения по ObjectID ФИАС |
-| `/fias/object-id` | `GET` | Получение ObjectID ФИАС по кадастровому номеру |
+| `/fias/object-id-by-cadastral` | `GET` | Получение ObjectID ФИАС по кадастровому номеру |
 
 ### Данные СУДРФ (судебные участки)
 | Эндпоинт | Метод | Описание |
@@ -110,14 +111,33 @@ docker compose up --build
 | `/sudrf/by-address` | `GET` | Судебный участок по адресу |
 | `/sudrf/by-object-id` | `GET` | Судебный участок по ObjectID ФИАС |
 
+### Аналитические PDF-отчёты
+| Эндпоинт | Метод | Описание |
+| :--- | :--- | :--- |
+| `/analytics/generate-report` | `POST` | Генерация PDF-отчёта по кадастровому номеру (Росреестр + НСПД + ФИАС + СУДРФ) |
+
+Тело запроса `POST /analytics/generate-report`:
+
+```json
+{
+  "cad_num": "38:00:000000:00001",
+  "include_nspd": true,
+  "include_fias": true,
+  "include_sudrf": true
+}
+```
+
+Росреестр — ядро отчёта (собирается всегда), остальные источники включаются флагами; при недоступности источника соответствующая секция помечается как «данные недоступны».
+
 ## 📂 Структура проекта
 
 ```text
 TerraData/
 ├── app/
-│   ├── api/                # Обработчики маршрутов API (rosreestr, converter, nspd, fias, sudrf)
+│   ├── api/                # Обработчики маршрутов API (rosreestr, converter, nspd, fias, sudrf, analytics)
 │   ├── models/             # ML-модели (pred.keras)
-│   └── services/           # Бизнес-логика (клиенты, конвертеры, обработка PDF)
+│   └── services/           # Бизнес-логика (клиенты, конвертеры, координаты, агрегация отчётов, PDF)
+│       └── types/          # Словари типов
 ├── docs/                   # Документация (MkDocs)
 ├── tests/                  # Тесты Pytest и моки
 ├── Dockerfile              # Контейнеризация
@@ -127,6 +147,7 @@ TerraData/
 ├── mkdocs.yml              # Конфигурация документации
 ├── pytest.ini              # Конфигурация pytest
 ├── README.md               # Описание проекта
+├── PROJECT_STATE.md        # Текущее состояние проекта
 └── ROADMAP.md              # Дорожная карта проекта
 ```
 

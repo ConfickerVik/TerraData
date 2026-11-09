@@ -5,7 +5,7 @@ from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -15,6 +15,8 @@ from reportlab.platypus import (
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
+from app.services.types.court_types import court_type_label
 
 # Кандидаты TTF-шрифтов с поддержкой кириллицы (в порядке приоритета).
 # Стандартные шрифты ReportLab (Helvetica и т.п.) НЕ содержат кириллицу,
@@ -110,7 +112,7 @@ class PDFService:
 
         # 2. Пространственные данные
         story.append(Paragraph("2. Пространственные данные", self._h2()))
-        story.append(self._spatial_paragraph(report.get("spatial")))
+        story.extend(self._spatial_paragraph(report.get("spatial")))
         story.append(Spacer(1, 6 * mm))
 
         # 3. Правовой статус
@@ -125,7 +127,7 @@ class PDFService:
 
         # 5. Сведения ФИАС
         story.append(Paragraph("5. Сведения ФИАС", self._h2()))
-        story.append(self._fias_paragraph(report.get("fias")))
+        story.extend(self._fias_paragraph(report.get("fias")))
         story.append(Spacer(1, 6 * mm))
 
         return story
@@ -183,22 +185,92 @@ class PDFService:
 
     def _spatial_paragraph(self, spatial):
         if not spatial:
-            return Paragraph(_DATA_UNAVAILABLE, self._body())
+            return [Paragraph(_DATA_UNAVAILABLE, self._body())]
 
         geometry = spatial.get("geometry")
-        lines = []
-        if geometry:
-            lines.append(f"Тип геометрии: {geometry.get('type', '—')}")
-            center = geometry.get("center")
-            if center:
-                lines.append(f"Центр (широта, долгота): {center[0]}, {center[1]}")
-            coords = geometry.get("coordinates")
-            if coords:
-                lines.append(f"Координаты: {coords}")
-        else:
-            lines.append("Геометрия не задана.")
+        if not geometry:
+            return [Paragraph("Геометрия не задана.", self._body())]
 
-        return Paragraph("<br/>".join(str(l) for l in lines), self._body())
+        geom_type = geometry.get("type", "Unknown")
+        flowables = [Paragraph(f"Тип геометрии: {geom_type}", self._body())]
+        coords = geometry.get("coordinates")
+
+        if geom_type == "Point":
+            # Для точки центр не показываем — он дублирует саму точку.
+            if coords:
+                flowables.append(Paragraph(f"Координаты: {coords}", self._body()))
+            return flowables
+
+        if geom_type == "Polygon":
+            center = geometry.get("center")
+            if center and len(center) >= 2:
+                flowables.append(
+                    Paragraph(
+                        f"Центр (широта, долгота): {center[0]}, {center[1]}",
+                        self._body(),
+                    )
+                )
+            flowables.append(self._coordinates_table(coords))
+            return flowables
+
+        # Прочие типы геометрии
+        if coords:
+            flowables.append(Paragraph(f"Координаты: {coords}", self._body()))
+        return flowables
+
+    def _coordinates_table(self, coords):
+        """
+        Таблица координат полигона с заголовком № | x | y.
+
+        GeoJSON Polygon: coordinates = [[ [x, y], [x, y], ... ], ...].
+        Берём первый (внешний) контур; x = долгота, y = широта.
+        """
+        if not coords:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        ring = coords
+        if isinstance(coords[0], list) and coords[0] and isinstance(coords[0][0], list):
+            ring = coords[0]
+
+        header = [
+            Paragraph("<b>№</b>", self._body()),
+            Paragraph("<b>x</b>", self._body()),
+            Paragraph("<b>y</b>", self._body()),
+        ]
+        rows = [header]
+        for i, pt in enumerate(ring, start=1):
+            if not isinstance(pt, (list, tuple)) or len(pt) < 2:
+                continue
+            rows.append([
+                Paragraph(str(i), self._body()),
+                Paragraph(self._fmt_coord(pt[0]), self._body()),
+                Paragraph(self._fmt_coord(pt[1]), self._body()),
+            ])
+
+        if len(rows) == 1:
+            # Только заголовок — координат нет.
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        table = Table(rows, colWidths=[20 * mm, 75 * mm, 75 * mm])
+        table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f5")),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return table
+
+    @staticmethod
+    def _fmt_coord(value):
+        """Форматирует координату: float -> 6 знаков после запятой."""
+        try:
+            return f"{float(value):.6f}"
+        except (TypeError, ValueError):
+            return str(value)
 
     def _legal_paragraph(self, legal):
         legal = legal or {}
@@ -234,32 +306,143 @@ class PDFService:
         if not court:
             return Paragraph(_DATA_UNAVAILABLE, self._body())
 
-        parts = [f"Судебный участок: {court.get('court_name', '—')}"]
-        if court.get("vncod"):
-            parts.append(f"Код участка (VNKOD): {court.get('vncod')}")
+        courts = court.get("courts")
+        if not courts:
+            # Обратная совместимость со старым форматом (court_name/vncod)
+            parts = [f"Судебный участок: {court.get('court_name', '—')}"]
+            if court.get("vncod"):
+                parts.append(f"Код участка (VNKOD): {court.get('vncod')}")
+            return Paragraph("<br/>".join(parts), self._body())
+
+        # Новый формат: суды по зоне ответственности.
+        parts = []
+        for c in courts:
+            label = court_type_label(c.get("type"))
+            parts.append(f"{label}: {c.get('name', '—')}")
+
         return Paragraph("<br/>".join(parts), self._body())
 
     def _fias_paragraph(self, fias):
         if not fias:
-            return Paragraph(_DATA_UNAVAILABLE, self._body())
+            return [Paragraph(_DATA_UNAVAILABLE, self._body())]
 
         addresses = fias.get("addresses", [])
         if not addresses:
+            return [Paragraph(_DATA_UNAVAILABLE, self._body())]
+
+        flowables = []
+        for addr in addresses:
+            if addr.get("full_name"):
+                flowables.append(
+                    Paragraph(f"Полный адрес: {addr['full_name']}", self._body())
+                )
+            if addr.get("address_type") is not None:
+                flowables.append(
+                    Paragraph(f"Деление: {'Административное деление' if addr['address_type'] == 1 else 'Муниципальное'}", self._body())
+                )
+            if addr.get("object_id") is not None:
+                flowables.append(
+                    Paragraph(f"Уникальный номер в ГАР: {addr['object_id']}", self._body())
+                )
+            if addr.get("object_guid") is not None:
+                flowables.append(
+                    Paragraph(f"Уникальный номер в ГАР (ID FIAS): {addr['object_guid']}", self._body())
+                )
+
+            address_detail = addr.get("address_detail", {})
+            if address_detail.get("postal_code") is not None:
+                flowables.append(
+                    Paragraph(f"Почтовый индекс: {addr['postal_code']}", self._body())
+                )
+
+            if address_detail.get("okato") is not None:
+                flowables.append(
+                    Paragraph(f"ОКАТО: {addr['okato']}", self._body())
+                )
+            if address_detail.get("oktmo") is not None:
+                flowables.append(
+                    Paragraph(f"ОКТМО код: {addr['oktmo']}", self._body())
+                )
+            if address_detail.get("oktmo_budget") is not None:
+                flowables.append(
+                    Paragraph(f"ОКТМО бюджетополучателя: {addr['oktmo_budget']}", self._body())
+                )
+            if address_detail.get("postal_code") is not None:
+                flowables.append(
+                    Paragraph(f"Почтовый код: {addr['postal_code']}", self._body())
+                )
+            if address_detail.get("ifns_fl") is not None:
+                flowables.append(
+                    Paragraph(f"Налоговый орган ФЛ: {addr['ifns_fl']}", self._body())
+                )
+            if address_detail.get("ifns_ul") is not None:
+                flowables.append(
+                    Paragraph(f"Налоговый орган ЮЛ: {addr['ifns_ul']}", self._body())
+                )
+
+            hierarchy = addr.get("hierarchy", [])
+            if hierarchy:
+                flowables.append(Paragraph("<b>Иерархия:</b>", self._body()))
+                flowables.append(Spacer(1, 2 * mm))
+                for item in hierarchy:
+                    flowables.append(self._hierarchy_item_table(item))
+                    flowables.append(Spacer(1, 3 * mm))
+
+        # Дополнительная информация по объекту (из /Search/ObjectDetails)
+        details = fias.get("object_details")
+        if details:
+            flowables.append(Paragraph("<b>Дополнительная информация:</b>", self._body()))
+            flowables.append(Spacer(1, 2 * mm))
+            flowables.append(self._object_details_table(details))
+            flowables.append(Spacer(1, 3 * mm))
+
+        if not flowables:
+            return [Paragraph(_DATA_UNAVAILABLE, self._body())]
+        return flowables
+
+    def _object_details_table(self, details):
+        """Таблица с дополнительной информацией об объекте из ObjectDetails."""
+        rows = []
+        if details.get("ReesterNumber"):
+            rows.append(("Уникальный номер реестровой записи", details["ReesterNumber"]))
+        if details.get("StartDate"):
+            rows.append(("Дата внесения записи", details["StartDate"]))
+        if details.get("UpdateDate"):
+            rows.append(("Дата актуализации записи", details["UpdateDate"]))
+        if details.get("FederalDistrict"):
+            rows.append(("Федеральный округ", details["FederalDistrict"]))
+
+        if not rows:
             return Paragraph(_DATA_UNAVAILABLE, self._body())
 
-        first = addresses[0]
-        parts = [f"Полный адрес: {first.get('full_name', '—')}"]
-        if first.get("object_id"):
-            parts.append(f"ObjectID: {first.get('object_id')}")
+        return self._key_value_table(rows)
 
-        hierarchy = first.get("hierarchy", [])
-        if hierarchy:
-            h = " → ".join(
-                f"{item.get('object_type', '?')}" for item in hierarchy
-            )
-            parts.append(f"Иерархия: {h}")
+    def _hierarchy_item_table(self, item):
+        """
+        Маленькая таблица с информацией об одном адресообразующем
+        элементе иерархии ФИАС.
+        """
+        rows = []
 
-        return Paragraph("<br/>".join(parts), self._body())
+        name = item.get("full_name") or item.get("name")
+        if name:
+            rows.append(("Наименование", name))
+
+        type_name = item.get("type_name")
+        type_short = item.get("type_short_name")
+        if type_name:
+            label = f"{type_name} ({type_short})" if type_short else type_name
+            rows.append(("Тип", label))
+
+        if item.get("object_id") is not None:
+            rows.append(("ObjectID", item["object_id"]))
+        if item.get("object_guid"):
+            rows.append(("GUID", item["object_guid"]))
+
+        if not rows:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        return self._key_value_table(rows)
 
 
 def general_rows(general: dict) -> list[tuple[str, str]]:
@@ -267,16 +450,34 @@ def general_rows(general: dict) -> list[tuple[str, str]]:
     rows = []
     if general.get("cad_num"):
         rows.append(("Кадастровый номер", general["cad_num"]))
+    if general.get("status"):
+        rows.append(("Статус записи", f"{'Актуальный' if general['status'] == '1' else 'Погашен'}"))
     if general.get("obj_type"):
         rows.append(("Тип объекта", general["obj_type"]))
     if general.get("address"):
         rows.append(("Адрес", general["address"]))
     if general.get("area") is not None:
         rows.append(("Площадь", f"{general['area']} {general.get('area_unit', 'кв.м')}"))
+    if general.get("floor"):
+        rows.append(("Этажность", general["floor"]))
+    if general.get("under_floor"):
+        rows.append(("Подземные этажи", general["under_floor"]))
     if general.get("level_floor") is not None:
         rows.append(("Этаж", general["level_floor"]))
+    if general.get("ownership_type"):
+        rows.append(("Тип собственности", general["ownership_type"]))
+    if general.get("oks_wall_material"):
+        rows.append(("Материал стен", general["oks_wall_material"]))
+    if general.get("oks_commisioning_year"):
+        rows.append(("Год ввода в эксплуатацию", general["oks_commisioning_year"]))
+    if general.get("purpose"):
+        rows.append(("Назначение объекта", general["purpose"]))
     if general.get("cad_cost") is not None:
         rows.append(("Кадастровая стоимость", f"{general['cad_cost']} руб."))
     if general.get("cad_cost_date"):
         rows.append(("Дата оценки", format_timestamp(general["cad_cost_date"])))
+    if general.get("reg_date"):
+        rows.append(("Дата постановки на учет", general["reg_date"]))
+    if general.get("info_update_date"):
+        rows.append(("Дата обновления информации", general["info_update_date"]))
     return rows

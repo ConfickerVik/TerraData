@@ -72,20 +72,20 @@ class CoordsConverter:
             lat, lon = cls.normalize_coordinates(coords[0], coords[1])
             return {
                 "type": "Point",
-                "coordinates": [lon, lat], # GeoJSON стандарт: [lon, lat]
+                "coordinates": [lat, lon], # GeoJSON стандарт: [lon, lat]
                 "center": [lat, lon]
             }
             
         elif geom_type == "Polygon":
             # Обрабатываем первый контур полигона
             polygon_coords = coords[0]
-            normalized_polygon = [cls.normalize_coordinates(pt[1], pt[0]) for pt in polygon_coords]
+            normalized_polygon = [cls.normalize_coordinates(pt[0], pt[1]) for pt in polygon_coords]
             # Для GeoJSON полигоны должны быть [[ [lon, lat], ... ]]
-            geojson_coords = [[ [pt[1], pt[0]] for pt in normalized_polygon ]]
+            # geojson_coords = [[ [pt[1], pt[0]] for pt in normalized_polygon ]]
             
             return {
                 "type": "Polygon",
-                "coordinates": geojson_coords,
+                "coordinates": normalized_polygon,
                 "center": cls.get_center(polygon_coords)
             }
             
