@@ -24,6 +24,7 @@ def test_root():
         "nspd": "/nspd",
         "fias": "/fias",
         "sudrf": "/sudrf",
+        "analytics": "/analytics",
     }
 
 
@@ -118,37 +119,6 @@ def test_format_timestamp_valid():
 
 def test_format_timestamp_invalid():
     assert format_timestamp("not-a-number") == "not-a-number"
-
-
-def test_pdf_service_empty_elements(tmp_path):
-    output = tmp_path / "report.txt"
-    assert PDFService().generate_report({"elements": []}, str(output)) is False
-    assert not output.exists()
-
-
-def test_pdf_service_generates_report(tmp_path):
-    output = tmp_path / "report.txt"
-    data = {
-        "elements": [
-            {
-                "cadNumber": "38:00:000000:00001",
-                "address": {"readableAddress": "г. Иркутск, ул. Тестовая, д. 1"},
-                "area": "44.80",
-                "mainCharacters": [{"unitDescription": "кв.м"}],
-                "levelFloor": "1",
-                "cadCost": "1234567.89",
-                "cadCostDeterminationDate": None,
-                "rights": [],
-                "encumbrances": [],
-            }
-        ]
-    }
-    assert PDFService().generate_report(data, str(output)) is True
-    assert output.exists()
-    content = output.read_text(encoding="utf-8")
-    assert "ОТЧЕТ ОБ ОБЪЕКТЕ НЕДВИЖИМОСТИ" in content
-    assert "38:00:000000:00001" in content
-    assert "г. Иркутск, ул. Тестовая, д. 1" in content
 
 
 # =============================================================================
@@ -539,7 +509,7 @@ from app.api.fias import fias_client as api_fias_client
 
 @patch.object(api_fias_client, "search_fias_by_cadastral", new=AsyncMock(return_value=None))
 def test_fias_by_cadastral_not_found():
-    response = client.get("/fias/by-cadastral/000:00:0000")
+    response = client.get("/fias/by-cadastral?cad_num=000:00:0000")
     assert response.status_code == 404
     assert "не найдены" in response.json()["detail"]
 
@@ -558,13 +528,13 @@ def test_fias_search_address_empty():
 
 @patch.object(api_fias_client, "search_fias_by_address_id", new=AsyncMock(return_value=None))
 def test_fias_by_object_id_not_found():
-    response = client.get("/fias/by-object-id/000000")
+    response = client.get("/fias/by-object-id?object_id=000000")
     assert response.status_code == 404
 
 
 @patch.object(api_fias_client, "get_object_id_by_cadastral_number", new=AsyncMock(return_value=None))
 def test_fias_object_id_not_found():
-    response = client.get("/fias/object-id/000:00:0000")
+    response = client.get("/fias/object-id-by-cadastral?cad_num=000:00:0000")
     assert response.status_code == 404
 
 
@@ -649,3 +619,186 @@ def test_api_by_object_id_success(mock_get_court, mock_fias):
 
     assert response.status_code == 200
     assert response.json()["court_info"]["court_name"] == "Судебный участок №30"
+
+
+# =============================================================================
+# МОДУЛЬ: app.services.report_service (ReportService)
+# =============================================================================
+
+from app.services.report_service import ReportService
+from app.services.pdf_service import PDFService
+
+
+@pytest.fixture
+def report_service():
+    """Сервис с подменёнными клиентами (без реальных сетевых вызовов)."""
+    svc = ReportService(
+        rosreestr_client=MagicMock(),
+        nspd_client=MagicMock(),
+        fias_client=MagicMock(),
+        sudrf_client=MagicMock(),
+    )
+    return svc
+
+
+ROSREESTR_RESPONSE = {
+    "elements": [
+        {
+            "cadNumber": "38:00:000000:00001",
+            "objType": "002001003000",
+            "address": {"readableAddress": "г. Иркутск, ул. Тестовая, д. 1"},
+            "area": "44.80",
+            "levelFloor": "5",
+            "cadCost": "3269726.66",
+            "cadCostDeterminationDate": 1672531200000,
+            "mainCharacters": [{"unitDescription": "кв.м"}],
+            "rights": [
+                {
+                    "rightTypeDesc": "Собственность",
+                    "rightRegDate": 1576195200000,
+                    "rightNumber": "38:00:000000:00001-38/119/2019-2",
+                }
+            ],
+            "encumbrances": [],
+        }
+    ]
+}
+
+
+async def test_report_service_gather_full(report_service):
+    """Все источники включены и возвращают данные."""
+    report_service.rosreestr.get_full_info = AsyncMock(return_value=ROSREESTR_RESPONSE)
+    report_service.nspd.get_property_cadastral_price = AsyncMock(
+        return_value={"data": {"features": [{"properties": {"category": 36369}}]}}
+    )
+    report_service.fias.search_fias_by_cadastral = AsyncMock(
+        return_value={
+            "addresses": [
+                {
+                    "full_name": "г. Иркутск",
+                    "hierarchy": [{"object_type": "house", "object_guid": "guid_house"}],
+                }
+            ]
+        }
+    )
+    report_service.sudrf.get_court_by_fias_id = AsyncMock(
+        return_value={"court_name": "Судебный участок №1"}
+    )
+
+    report = await report_service.gather_report("38:00:000000:00001")
+
+    assert report is not None
+    assert report["general"]["cad_num"] == "38:00:000000:00001"
+    assert report["general"]["address"] == "г. Иркутск, ул. Тестовая, д. 1"
+    assert report["general"]["area"] == "44.80"
+    assert report["general"]["area_unit"] == "кв.м"
+    assert report["spatial"] is not None
+    assert report["fias"] is not None
+    assert report["court"] is not None
+
+
+async def test_report_service_rosreestr_empty(report_service):
+    """Если Росреестр пуст — отчёт не строится (None)."""
+    report_service.rosreestr.get_full_info = AsyncMock(return_value=None)
+
+    report = await report_service.gather_report("38:00:000000:00001")
+
+    assert report is None
+
+
+async def test_report_service_optional_disabled(report_service):
+    """Опциональные источники отключены флагами -> секции None."""
+    report_service.rosreestr.get_full_info = AsyncMock(return_value=ROSREESTR_RESPONSE)
+    report_service.nspd.get_property_cadastral_price = AsyncMock()
+    report_service.fias.search_fias_by_cadastral = AsyncMock()
+    report_service.sudrf.get_court_by_fias_id = AsyncMock()
+
+    report = await report_service.gather_report(
+        "38:00:000000:00001",
+        include_nspd=False,
+        include_fias=False,
+        include_sudrf=False,
+    )
+
+    assert report is not None
+    assert report["spatial"] is None
+    assert report["fias"] is None
+    assert report["court"] is None
+    # Опциональные клиенты не должны вызываться
+    report_service.nspd.get_property_cadastral_price.assert_not_called()
+    report_service.fias.search_fias_by_cadastral.assert_not_called()
+    report_service.sudrf.get_court_by_fias_id.assert_not_called()
+
+
+async def test_report_service_partial_failure(report_service):
+    """Один источник падает -> его секция None, остальные заполнены."""
+    report_service.rosreestr.get_full_info = AsyncMock(return_value=ROSREESTR_RESPONSE)
+    report_service.nspd.get_property_cadastral_price = AsyncMock(
+        side_effect=Exception("NSPD down")
+    )
+    report_service.fias.search_fias_by_cadastral = AsyncMock(
+        return_value={"addresses": [{"full_name": "г. Иркутск", "hierarchy": []}]}
+    )
+    report_service.sudrf.get_court_by_fias_id = AsyncMock(return_value=None)
+    report_service.sudrf.get_fias_id_by_address = AsyncMock(return_value=None)
+
+    report = await report_service.gather_report("38:00:000000:00001")
+
+    assert report is not None
+    assert report["spatial"] is None  # NSPD упал
+    assert report["fias"] is not None
+    assert report["court"] is None
+
+
+# =============================================================================
+# МОДУЛЬ: app.services.pdf_service (PDFService)
+# =============================================================================
+
+
+def test_pdf_service_generates_bytes():
+    """Отчёт конвертируется в PDF-байты с заголовком %PDF."""
+    report = {
+        "general": {
+            "cad_num": "38:00:000000:00001",
+            "address": "г. Иркутск, ул. Тестовая, д. 1",
+            "area": "44.80",
+            "area_unit": "кв.м",
+            "level_floor": "5",
+            "cad_cost": "3269726.66",
+            "cad_cost_date": 1672531200000,
+        },
+        "spatial": {"geometry": {"type": "Point", "center": [52.0, 104.0], "coordinates": [104.0, 52.0]}},
+        "legal": {
+            "rights": [{"rightTypeDesc": "Собственность", "rightRegDate": 1576195200000, "rightNumber": "38:1"}],
+            "encumbrances": [],
+        },
+        "fias": {"addresses": [{"full_name": "г. Иркутск", "object_id": "123", "hierarchy": []}]},
+        "court": {"court_name": "Судебный участок №1", "vncod": "12MS0000"},
+    }
+
+    pdf_bytes = PDFService().generate_report(report)
+
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_pdf_service_empty_sections():
+    """Пустые секции (None) рендерятся без ошибок."""
+    report = {
+        "general": {"cad_num": "38:00:000000:00001", "address": "г. Иркутск"},
+        "spatial": None,
+        "legal": {"rights": [], "encumbrances": []},
+        "fias": None,
+        "court": None,
+    }
+
+    pdf_bytes = PDFService().generate_report(report)
+
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_pdf_service_empty_report():
+    """Пустой отчёт (без cad_num и address) -> False."""
+    assert PDFService().generate_report({"general": {}}) is False
+
