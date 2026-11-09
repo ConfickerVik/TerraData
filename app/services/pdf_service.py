@@ -17,6 +17,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 from app.services.types.court_types import court_type_label
+from app.services.types.obj_types import obj_type_label
+from app.services.types.purpose_types import purpose_type_label
 
 # Кандидаты TTF-шрифтов с поддержкой кириллицы (в порядке приоритета).
 # Стандартные шрифты ReportLab (Helvetica и т.п.) НЕ содержат кириллицу,
@@ -453,7 +455,7 @@ def general_rows(general: dict) -> list[tuple[str, str]]:
     if general.get("status"):
         rows.append(("Статус записи", f"{'Актуальный' if general['status'] == '1' else 'Погашен'}"))
     if general.get("obj_type"):
-        rows.append(("Тип объекта", general["obj_type"]))
+        rows.append(("Тип объекта", obj_type_label(general["obj_type"])))
     if general.get("address"):
         rows.append(("Адрес", general["address"]))
     if general.get("area") is not None:
@@ -471,13 +473,13 @@ def general_rows(general: dict) -> list[tuple[str, str]]:
     if general.get("oks_commisioning_year"):
         rows.append(("Год ввода в эксплуатацию", general["oks_commisioning_year"]))
     if general.get("purpose"):
-        rows.append(("Назначение объекта", general["purpose"]))
+        rows.append(("Назначение объекта", purpose_type_label(general["purpose"])))
     if general.get("cad_cost") is not None:
         rows.append(("Кадастровая стоимость", f"{general['cad_cost']} руб."))
     if general.get("cad_cost_date"):
         rows.append(("Дата оценки", format_timestamp(general["cad_cost_date"])))
     if general.get("reg_date"):
-        rows.append(("Дата постановки на учет", general["reg_date"]))
+        rows.append(("Дата постановки на учет", format_timestamp(general["reg_date"])))
     if general.get("info_update_date"):
-        rows.append(("Дата обновления информации", general["info_update_date"]))
+        rows.append(("Дата обновления информации", format_timestamp(general["info_update_date"])))
     return rows
