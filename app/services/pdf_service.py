@@ -1,58 +1,282 @@
-import json
+import io
+import os
 from datetime import datetime
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# Кандидаты TTF-шрифтов с поддержкой кириллицы (в порядке приоритета).
+# Стандартные шрифты ReportLab (Helvetica и т.п.) НЕ содержат кириллицу,
+# поэтому для русского текста обязательно регистрируем TTF.
+_FONT_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "DejaVuSans.ttf"),
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/tahoma.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+]
+
+_DATA_UNAVAILABLE = "данные недоступны"
+
+
+def _register_font() -> str:
+    """
+    Регистрирует кириллический TTF-шрифт и возвращает его имя.
+    Возвращает 'Helvetica' как fallback, если ни один TTF не найден.
+    """
+    for path in _FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("TerraDataFont", path))
+                return "TerraDataFont"
+            except Exception:
+                continue
+    return "Helvetica"
+
+
+_FONT_NAME = _register_font()
+
 
 def format_timestamp(ts):
     if not ts:
         return "н/д"
     try:
         # Timestamp is in milliseconds
-        return datetime.fromtimestamp(ts / 1000.0).strftime('%d.%m.%Y')
+        return datetime.fromtimestamp(ts / 1000.0).strftime("%d.%m.%Y")
     except Exception:
         return str(ts)
 
-class PDFService:
-    def generate_report(self, data, output_path):
-        """
-        Generates a PDF report from the provided data.
-        Since we are in the setup phase, this will currently save a text-based 
-        summary to simulate the PDF generation until we install fpdf2/reportlab.
-        """
-        elements = data.get("elements", [])
-        if not elements:
-            return False
-        
-        obj = elements[0]
-        addr = obj.get("address", {})
-        
-        report_content = [
-            "ОТЧЕТ ОБ ОБЪЕКТЕ НЕДВИЖИМОСТИ",
-            "="*30,
-            f"Кадастровый номер: {obj.get('cadNumber')}",
-            f"Адрес: {addr.get('readableAddress')}",
-            f"Площадь: {obj.get('area')} {obj.get('mainCharacters', [{}])[0].get('unitDescription', 'кв.м') if obj.get('mainCharacters') else 'кв.м'}",
-            f"Этаж: {obj.get('levelFloor')}",
-            f"Кадастровая стоимость: {obj.get('cadCost')} руб.",
-            f"Дата оценки: {format_timestamp(obj.get('cadCostDeterminationDate'))}",
-            "",
-            "ПРАВА СОБСТВЕННОСТИ:",
-            "-"*20
-        ]
-        
-        for right in obj.get("rights", []):
-            report_content.append(f"- {right.get('rightTypeDesc')}, Рег. дата: {format_timestamp(right.get('rightRegDate'))}, Номер: {right.get('rightNumber')}")
-            
-        report_content.append("")
-        report_content.append("ОБРЕМЕНЕНИЯ:")
-        report_content.append("-"*20)
-        
-        for enc in obj.get("encumbrances", []):
-            report_content.append(f"- {enc.get('typeDesc')}, Дата: {format_timestamp(enc.get('startDate'))}, Номер: {enc.get('encumbranceNumber')}")
 
-        full_text = "\n".join(report_content)
-        
-        # For now, we write to a text file to verify logic. 
-        # In the next step, I'll implement real PDF generation.
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(full_text)
-        
-        return True
+class PDFService:
+    """Генератор аналитического PDF-отчёта через ReportLab."""
+
+    def generate_report(self, report: dict, output_path: str | None = None) -> bytes | bool:
+        """
+        Формирует PDF-отчёт по нормализованной структуре report (см. ReportService).
+
+        :param report: dict с ключами general/spatial/legal/fias/court.
+        :param output_path: если задан — дополнительно сохраняет PDF в файл.
+        :return: байты PDF, либо False, если отчёт пуст.
+        """
+        general = report.get("general") or {}
+        if not general.get("cad_num") and not general.get("address"):
+            return False
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+            title="Отчёт об объекте недвижимости",
+        )
+
+        story = self._build_story(report)
+        doc.build(story)
+
+        pdf_bytes = buffer.getvalue()
+        if output_path:
+            with open(output_path, "wb") as f:
+                f.write(pdf_bytes)
+        return pdf_bytes
+
+    # --- Вспомогательные методы построения документа ---
+
+    def _build_story(self, report: dict):
+        story = []
+        general = report.get("general") or {}
+
+        # Заголовок
+        story.append(Paragraph("ОТЧЁТ ОБ ОБЪЕКТЕ НЕДВИЖИМОСТИ", self._h1()))
+        story.append(Spacer(1, 4 * mm))
+
+        # 1. Общая информация
+        story.append(Paragraph("1. Общая информация", self._h2()))
+        story.append(self._key_value_table(general_rows(general)))
+        story.append(Spacer(1, 6 * mm))
+
+        # 2. Пространственные данные
+        story.append(Paragraph("2. Пространственные данные", self._h2()))
+        story.append(self._spatial_paragraph(report.get("spatial")))
+        story.append(Spacer(1, 6 * mm))
+
+        # 3. Правовой статус
+        story.append(Paragraph("3. Правовой статус", self._h2()))
+        story.append(self._legal_paragraph(report.get("legal")))
+        story.append(Spacer(1, 6 * mm))
+
+        # 4. Судебная принадлежность
+        story.append(Paragraph("4. Судебная принадлежность", self._h2()))
+        story.append(self._court_paragraph(report.get("court")))
+        story.append(Spacer(1, 6 * mm))
+
+        # 5. Сведения ФИАС
+        story.append(Paragraph("5. Сведения ФИАС", self._h2()))
+        story.append(self._fias_paragraph(report.get("fias")))
+        story.append(Spacer(1, 6 * mm))
+
+        return story
+
+    # --- Стили ---
+
+    def _h1(self):
+        return ParagraphStyle(
+            "H1",
+            fontName=_FONT_NAME,
+            fontSize=18,
+            leading=22,
+            alignment=1,  # center
+            spaceAfter=6,
+            textColor=colors.HexColor("#1a1a1a"),
+        )
+
+    def _h2(self):
+        return ParagraphStyle(
+            "H2",
+            fontName=_FONT_NAME,
+            fontSize=13,
+            leading=16,
+            spaceBefore=8,
+            spaceAfter=4,
+            textColor=colors.HexColor("#333333"),
+        )
+
+    def _body(self):
+        return ParagraphStyle(
+            "Body",
+            fontName=_FONT_NAME,
+            fontSize=10,
+            leading=13,
+        )
+
+    # --- Рендер секций ---
+
+    def _key_value_table(self, rows):
+        if not rows:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        table_data = [[Paragraph(f"<b>{k}</b>", self._body()), Paragraph(str(v), self._body())] for k, v in rows]
+        table = Table(table_data, colWidths=[60 * mm, 110 * mm])
+        table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        return table
+
+    def _spatial_paragraph(self, spatial):
+        if not spatial:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        geometry = spatial.get("geometry")
+        lines = []
+        if geometry:
+            lines.append(f"Тип геометрии: {geometry.get('type', '—')}")
+            center = geometry.get("center")
+            if center:
+                lines.append(f"Центр (широта, долгота): {center[0]}, {center[1]}")
+            coords = geometry.get("coordinates")
+            if coords:
+                lines.append(f"Координаты: {coords}")
+        else:
+            lines.append("Геометрия не задана.")
+
+        return Paragraph("<br/>".join(str(l) for l in lines), self._body())
+
+    def _legal_paragraph(self, legal):
+        legal = legal or {}
+        rights = legal.get("rights", [])
+        encs = legal.get("encumbrances", [])
+
+        parts = []
+        parts.append("<b>Права собственности:</b>")
+        if rights:
+            for r in rights:
+                parts.append(
+                    f"— {r.get('rightTypeDesc', '—')}, "
+                    f"рег. дата: {format_timestamp(r.get('rightRegDate'))}, "
+                    f"номер: {r.get('rightNumber', '—')}"
+                )
+        else:
+            parts.append(_DATA_UNAVAILABLE)
+
+        parts.append("<b>Обременения:</b>")
+        if encs:
+            for e in encs:
+                parts.append(
+                    f"— {e.get('typeDesc', '—')}, "
+                    f"дата: {format_timestamp(e.get('startDate'))}, "
+                    f"номер: {e.get('encumbranceNumber', '—')}"
+                )
+        else:
+            parts.append(_DATA_UNAVAILABLE)
+
+        return Paragraph("<br/>".join(parts), self._body())
+
+    def _court_paragraph(self, court):
+        if not court:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        parts = [f"Судебный участок: {court.get('court_name', '—')}"]
+        if court.get("vncod"):
+            parts.append(f"Код участка (VNKOD): {court.get('vncod')}")
+        return Paragraph("<br/>".join(parts), self._body())
+
+    def _fias_paragraph(self, fias):
+        if not fias:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        addresses = fias.get("addresses", [])
+        if not addresses:
+            return Paragraph(_DATA_UNAVAILABLE, self._body())
+
+        first = addresses[0]
+        parts = [f"Полный адрес: {first.get('full_name', '—')}"]
+        if first.get("object_id"):
+            parts.append(f"ObjectID: {first.get('object_id')}")
+
+        hierarchy = first.get("hierarchy", [])
+        if hierarchy:
+            h = " → ".join(
+                f"{item.get('object_type', '?')}" for item in hierarchy
+            )
+            parts.append(f"Иерархия: {h}")
+
+        return Paragraph("<br/>".join(parts), self._body())
+
+
+def general_rows(general: dict) -> list[tuple[str, str]]:
+    """Формирует строки таблицы общей информации из секции general."""
+    rows = []
+    if general.get("cad_num"):
+        rows.append(("Кадастровый номер", general["cad_num"]))
+    if general.get("obj_type"):
+        rows.append(("Тип объекта", general["obj_type"]))
+    if general.get("address"):
+        rows.append(("Адрес", general["address"]))
+    if general.get("area") is not None:
+        rows.append(("Площадь", f"{general['area']} {general.get('area_unit', 'кв.м')}"))
+    if general.get("level_floor") is not None:
+        rows.append(("Этаж", general["level_floor"]))
+    if general.get("cad_cost") is not None:
+        rows.append(("Кадастровая стоимость", f"{general['cad_cost']} руб."))
+    if general.get("cad_cost_date"):
+        rows.append(("Дата оценки", format_timestamp(general["cad_cost_date"])))
+    return rows
