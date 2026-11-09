@@ -1,83 +1,174 @@
-import httpx
-import json
+import asyncio
 import logging
-from typing import List, Dict, Optional, Any
+import time
+from typing import List, Dict, Optional, Any, Callable, Awaitable
+
+import httpx
+
 from app.services.address_cleaner import AddressCleaner
 
 logger = logging.getLogger(__name__)
 
+# Заголовки, имитирующие браузерный запрос: на fias.nalog.ru стоит анти-бот,
+# и дефолтный User-Agent python-httpx быстрее попадает под rate-limit.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://fias.nalog.ru/",
+    "Accept": "application/json, text/plain, */*",
+}
+
+
 class FIASClient:
-    def __init__(self, timeout=30.0):
+    def __init__(self, timeout=60.0):
         self.timeout = timeout
         self.base_url_public = "https://fias-public-service.nalog.ru/api/spas/v2.0"
         self.base_url_nalog = "https://fias.nalog.ru"
 
-    async def get_master_token(self) -> Optional[str]:
-        """Получение мастер токена для доступа к API ФИАС."""
-        url = f"{self.base_url_nalog}/Home/GetSpasSettings?url=https%3A%2F%2Ffias.nalog.ru%2F"
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as session:
-                response = await session.get(url)
-            if response.status_code == 200:
-                content = json.loads(response.text)
-                return content.get('Token')
-        except Exception as e:
-            logger.error(f"Error getting master token: {e}")
-        return None
+        # Кэш master-токена: запрашиваем его один раз и переиспользуем,
+        # чтобы не упираться в rate-limit / временные баны по IP.
+        self._token: Optional[str] = None
+        self._token_ts = 0.0
+        self._token_ttl = 25 * 60  # секунд (токен ФИАС живёт ~30 минут)
+        self._token_lock = asyncio.Lock()
+
+    async def get_master_token(self, force: bool = False) -> Optional[str]:
+        """
+        Получение master-токена для доступа к API ФИАС.
+
+        Токен кэшируется на `_token_ttl` секунд; при неудаче выполняется до
+        3 попыток с экспоненциальной задержкой. Блокировка гарантирует, что
+        при параллельных запросах токен запрашивается только один раз.
+        """
+        async with self._token_lock:
+            if not force and self._token and (time.monotonic() - self._token_ts) < self._token_ttl:
+                return self._token
+
+            url = f"{self.base_url_nalog}/Home/GetSpasSettings?url=https%3A%2F%2Ffias.nalog.ru%2F"
+
+            for attempt in range(3):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout, headers=_BROWSER_HEADERS) as session:
+                        response = await session.get(url)
+
+                    if response.status_code == 200:
+                        token = response.json().get("Token")
+                        if token:
+                            self._token = token
+                            self._token_ts = time.monotonic()
+                            return token
+                        logger.warning("GetSpasSettings вернул 200, но без Token: %.200s", response.text)
+                    else:
+                        logger.warning(
+                            "GetSpasSettings attempt=%d status=%s body=%.200s",
+                            attempt + 1, response.status_code, response.text,
+                        )
+                except Exception as e:
+                    logger.warning("GetSpasSettings attempt=%d error: %s", attempt + 1, e)
+
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)  # 1с, 2с
+
+            return None
+
+    async def _authorized_headers(self, force: bool = False) -> Optional[Dict[str, str]]:
+        token = await self.get_master_token(force=force)
+        if not token:
+            return None
+        return {"master-token": token}
+
+    async def _request_with_token(
+        self,
+        request: Callable[[Dict[str, str]], Awaitable[httpx.Response]],
+    ) -> Optional[httpx.Response]:
+        """
+        Выполняет авторизованный запрос. При 401/403 один раз принудительно
+        обновляет master-токен и повторяет. Возвращает None, если токен
+        получить не удалось.
+        """
+        headers = await self._authorized_headers()
+        if headers is None:
+            return None
+
+        response = await request(headers)
+        if response.status_code in (401, 403):
+            logger.warning(
+                "API ФИАС отклонил master-token (status=%s), обновляю токен один раз",
+                response.status_code,
+            )
+            headers = await self._authorized_headers(force=True)
+            if headers is None:
+                return response
+            response = await request(headers)
+
+        return response
 
     async def get_object_id_by_cadastral_number(self, cadastral_number: str) -> Optional[str]:
         """Получение уникального ObjectID по кадастровому номеру."""
         url = f"{self.base_url_nalog}/ExtendedSearch/GetObjectsByCadastralNumber"
         form = {"cadastralNumber": cadastral_number}
-        token = await self.get_master_token()
-        if not token:
-            return None
 
         try:
-            headers = {"master-token": token}
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                response = await session.post(url, data=form, headers=headers)
-            if response.status_code == 200:
-                object_ids = json.loads(response.text).get("ObjectIds", [])
-                return object_ids[0] if object_ids else None
+                async def do(headers: Dict[str, str]) -> httpx.Response:
+                    return await session.post(url, data=form, headers=headers)
+
+                response = await self._request_with_token(do)
+
+            if not response or response.status_code != 200:
+                logger.warning(
+                    "GetObjectsByCadastralNumber status=%s",
+                    response.status_code if response else "no-token",
+                )
+                return None
+
+            object_ids = response.json().get("ObjectIds", [])
+            return object_ids[0] if object_ids else None
         except Exception as e:
             logger.error(f"Error getting object ID by cadastral: {e}")
-        return None
+            return None
 
     async def get_address_hints(self, address: str) -> List[Dict[str, Any]]:
         """
         Получение списка всех подходящих вариантов адресов (подсказок).
         Возвращает список словарей с object_id и текстовым представлением.
         """
-        # Очищаем адрес перед запросом в ФИАС
         cleaned_address = AddressCleaner.clean(address)
         if not cleaned_address:
             return []
 
         url = f"{self.base_url_public}/GetAddressHint"
         payload = {"searchString": cleaned_address, "addressType": 2, "searchNonActive": False}
-        token = await self.get_master_token()
-        if not token:
-            return []
 
         try:
-            headers = {"master-token": token}
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                response = await session.post(url, json=payload, headers=headers)
-            if response.status_code == 200:
-                content = json.loads(response.text)
-                hints = content.get("hints", [])
-                return [
-                    {
-                        "object_id": h.get("object_id"),
-                        "value": h.get("full_name"),
-                        "path": h.get("path")
-                    }
-                    for h in hints
-                ]
+                async def do(headers: Dict[str, str]) -> httpx.Response:
+                    return await session.post(url, json=payload, headers=headers)
+
+                response = await self._request_with_token(do)
+
+            if not response or response.status_code != 200:
+                logger.warning(
+                    "GetAddressHint status=%s",
+                    response.status_code if response else "no-token",
+                )
+                return []
+
+            hints = response.json().get("hints", [])
+            return [
+                {
+                    "object_id": h.get("object_id"),
+                    "value": h.get("full_name"),
+                    "path": h.get("path"),
+                }
+                for h in hints
+            ]
         except Exception as e:
             logger.error(f"Error getting address hints: {e}")
-        return []
+            return []
 
     async def get_info_by_object_id(self, object_id: str, address_type: int = 1):
         """
@@ -89,17 +180,22 @@ class FIASClient:
         UpdateDate и т.д.).
         """
         url = f"{self.base_url_public}/GetAddressItemById?object_id={object_id}&address_type={address_type}"
-        token = await self.get_master_token()
-        if not token:
-            return None
 
         try:
-            headers = {"master-token": token}
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                response = await session.get(url, headers=headers)
-            if response.status_code != 200:
+                async def do(headers: Dict[str, str]) -> httpx.Response:
+                    return await session.get(url, headers=headers)
+
+                response = await self._request_with_token(do)
+
+            if not response or response.status_code != 200:
+                logger.warning(
+                    "GetAddressItemById status=%s",
+                    response.status_code if response else "no-token",
+                )
                 return None
-            data = json.loads(response.text)
+
+            data = response.json()
         except Exception as e:
             logger.error(f"Error getting info by object ID: {e}")
             return None
@@ -121,7 +217,8 @@ class FIASClient:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
                 response = await session.get(url)
             if response.status_code == 200:
-                return json.loads(response.text)
+                return response.json()
+            logger.warning("ObjectDetails status=%s body=%.200s", response.status_code, response.text)
         except Exception as e:
             logger.error(f"Error getting object details: {e}")
         return None
