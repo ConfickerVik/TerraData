@@ -55,7 +55,7 @@ class RosreestrClient:
         Gets captcha image and solves it using the shared pdf_converter model.
         """
         if not self.pdf_converter:
-            raise Exception("RosreestrPdfConverter is required for captcha solving")
+            self.pdf_converter = RosreestrPdfConverter()
 
         try:
             resp = await client.get(f"{self.base_url}/captcha.png", headers=headers)
