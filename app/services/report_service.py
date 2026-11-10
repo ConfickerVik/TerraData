@@ -68,7 +68,7 @@ class ReportService:
         return self._build_report(cad_num, obj, nspd_data, fias_data, sudrf_data)
 
     async def _collect_nspd(self, cad_num: str) -> Optional[Dict[str, Any]]:
-        """Собирает данные НСПД (база + геометрия). Ошибки -> None."""
+        """Собирает данные НСПД (база + геометрия + вкладки). Ошибки -> None."""
         try:
             base_info = await self.nspd.get_property_cadastral_price(cad_num)
             if not base_info:
@@ -84,9 +84,18 @@ class ReportService:
             except (KeyError, IndexError):
                 geometry = None
 
+            # Детальные карточки (вкладки) — опционально; их сбой не должен
+            # ронять всю секцию НСПД.
+            details = None
+            try:
+                details = await self.nspd.collect_details(base_info)
+            except Exception as e:
+                logger.warning(f"NSPD details collection error for {cad_num}: {e}")
+
             return {
                 "base_info": base_info,
                 "geometry": geometry,
+                "details": details,
             }
         except Exception as e:
             logger.error(f"NSPD collection error for {cad_num}: {e}")

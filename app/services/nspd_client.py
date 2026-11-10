@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import logging
 from typing import Optional, Dict, Any, List, Union
@@ -42,6 +43,57 @@ class NspdClient:
                 return features[0]["properties"]["category"]
         except (KeyError, IndexError):
             pass
+        return None
+
+    async def collect_details(self, base_info: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Собирает категорийные вкладки (tab) объекта по базовой карточке НСПД.
+
+        Набор вкладок зависит от категории объекта (Здание/ЗУ). Для помещений
+        и неизвестных категорий возвращает None. Ключи ответа могут отличаться
+        даже внутри одной категории, поэтому все обращения защищены .get().
+        """
+        if not base_info:
+            return None
+
+        try:
+            feature = base_info["data"]["features"][0]
+        except (KeyError, IndexError, TypeError):
+            return None
+
+        category_id = self.get_category_id(base_info)
+        obj_id = feature.get("id")
+        options = (feature.get("properties") or {}).get("options") or {}
+        registers_id = options.get("registersId")
+
+        if category_id == self.CATEGORY_BUILDINGS:
+            results = await asyncio.gather(
+                self.get_objects_list(obj_id, registers_id, category_id),
+                self.get_land_links(obj_id, registers_id, category_id),
+                self.get_build_parts(obj_id, registers_id, category_id),
+                self.get_permission_types(obj_id, registers_id, category_id),
+            )
+            return {
+                "objects_list": results[0],
+                "land_links": results[1],
+                "build_parts": results[2],
+                "permission_types": results[3],
+            }
+
+        if category_id == self.CATEGORY_LAND:
+            results = await asyncio.gather(
+                self.get_land_objects_list(obj_id),
+                self.get_land_permission_types(obj_id),
+                self.get_land_parts(obj_id),
+                self.get_land_composition(obj_id),
+            )
+            return {
+                "objects_list": results[0],
+                "permission_types": results[1],
+                "land_parts": results[2],
+                "composition_land": results[3],
+            }
+
         return None
 
     # --- Универсальный метод для запросов к вкладкам ---

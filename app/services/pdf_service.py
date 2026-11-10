@@ -19,6 +19,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from app.services.types.court_types import court_type_label
 from app.services.types.obj_types import obj_type_label
 from app.services.types.purpose_types import purpose_type_label
+from app.services.types.nspd_types import _NSPD_CATEGORY_LABELS, _NSPD_FIELDS, _NSPD_TABS
 
 # Кандидаты TTF-шрифтов с поддержкой кириллицы (в порядке приоритета).
 # Стандартные шрифты ReportLab (Helvetica и т.п.) НЕ содержат кириллицу,
@@ -32,6 +33,22 @@ _FONT_CANDIDATES = [
 ]
 
 _DATA_UNAVAILABLE = "данные недоступны"
+
+
+
+
+def _nspd_category_id(base_info: dict):
+    try:
+        return base_info["data"]["features"][0]["properties"].get("category")
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+
+def _nspd_options(base_info: dict) -> dict:
+    try:
+        return base_info["data"]["features"][0]["properties"].get("options") or {}
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return {}
 
 
 def _register_font() -> str:
@@ -130,6 +147,11 @@ class PDFService:
         # 5. Сведения ФИАС
         story.append(Paragraph("5. Сведения ФИАС", self._h2()))
         story.extend(self._fias_paragraph(report.get("fias")))
+        story.append(Spacer(1, 6 * mm))
+
+        # 6. Сведения НСПД
+        story.append(Paragraph("6. Сведения НСПД", self._h2()))
+        story.extend(self._nspd_paragraph(report.get("spatial")))
         story.append(Spacer(1, 6 * mm))
 
         return story
@@ -273,6 +295,83 @@ class PDFService:
             return f"{float(value):.6f}"
         except (TypeError, ValueError):
             return str(value)
+
+    # --- Рендер секции НСПД ---
+
+    def _nspd_paragraph(self, nspd):
+        if not nspd:
+            return [Paragraph(_DATA_UNAVAILABLE, self._body())]
+
+        flowables = []
+        base_info = nspd.get("base_info") or {}
+        category_id = _nspd_category_id(base_info)
+
+        category_label = _NSPD_CATEGORY_LABELS.get(category_id) or (
+            f"Категория {category_id}" if category_id else "не определена"
+        )
+        flowables.append(Paragraph(f"<b>Категория:</b> {category_label}", self._body()))
+
+        rows = self._nspd_category_rows(base_info, category_id)
+        if rows:
+            flowables.append(self._key_value_table(rows))
+        else:
+            flowables.append(Paragraph(_DATA_UNAVAILABLE, self._body()))
+
+        flowables.extend(self._nspd_tabs(nspd.get("details")))
+
+        return flowables
+
+    def _nspd_category_rows(self, base_info, category_id):
+        fields = _NSPD_FIELDS.get(category_id, [])
+        options = _nspd_options(base_info)
+        rows = []
+        for label, keys in fields:
+            value = None
+            for key in keys:
+                raw = options.get(key)
+                if raw is None or raw == "" or raw is False:
+                    continue
+                value = "Да" if raw is True else raw
+                break
+            if value is not None:
+                rows.append((label, value))
+        return rows
+
+    def _nspd_tabs(self, details):
+        if not isinstance(details, dict):
+            return []
+
+        flowables = []
+        for key, label, is_group in _NSPD_TABS:
+            tab = details.get(key)
+            if not isinstance(tab, dict):
+                continue
+
+            flowables.append(Paragraph(f"<b>{label}</b>", self._body()))
+
+            if is_group:
+                lines = []
+                for group in tab.get("object") or []:
+                    if not isinstance(group, dict):
+                        continue
+                    title = group.get("title") or ""
+                    values = self._tab_values(group.get("value"))
+                    if values:
+                        lines.append(f"{title + ': ' if title else ''}{values}")
+                flowables.append(
+                    Paragraph("<br/>".join(lines) if lines else _DATA_UNAVAILABLE, self._body())
+                )
+            else:
+                values = self._tab_values(tab.get("value"))
+                flowables.append(Paragraph(values or _DATA_UNAVAILABLE, self._body()))
+
+        return flowables
+
+    @staticmethod
+    def _tab_values(values):
+        if not isinstance(values, list):
+            return ""
+        return "; ".join(str(v) for v in values if v not in (None, ""))
 
     def _legal_paragraph(self, legal):
         legal = legal or {}
