@@ -16,6 +16,7 @@ nav:
       - API НСПД: nspd_api.md
       - API ФИАС: fias_api.md
       - API СУДРФ: sudrf_api.md
+      - API Аутентификации: auth_api.md
   - Технические детали:
       - Архитектура: architecture.md
       - ML Модель: ml_model.md

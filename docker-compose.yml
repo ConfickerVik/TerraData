@@ -1,18 +1,45 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: terradata_db
+    environment:
+      POSTGRES_USER: terradata
+      POSTGRES_PASSWORD: terradata
+      POSTGRES_DB: terradata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terradata -d terradata"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   terradata-app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: terradata_service
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       # Монтируем локальную папку data в контейнер для сохранения отчетов и чтения XML
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - TZ=Europe/Moscow
+      - DATABASE_URL=postgresql+asyncpg://terradata:terradata@db:5432/terradata
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-me-in-production}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - DEFAULT_DAILY_QUOTA=${DEFAULT_DAILY_QUOTA:-1000}
     restart: unless-stopped
-    # Если в будущем добавите API (FastAPI), раскомментируйте порты:
     ports:
       - "8000:8000"
+
+volumes:
+  pgdata:

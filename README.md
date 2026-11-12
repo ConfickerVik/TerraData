@@ -16,6 +16,7 @@ TerraData — это API-сервис для работы с государст�
 - **ФИАС**: поиск адресов, получение ObjectID и сведений по кадастровому номеру.
 - **СУДРФ**: определение судебного участка по кадастровому номеру, адресу или ObjectID ФИАС.
 - **Аналитические PDF-отчёты**: агрегация данных из Росреестра, НСПД, ФИАС и СУДРФ в единый PDF-документ по кадастровому номеру.
+- **Аутентификация и авторизация**: регистрация/вход (JWT), API-ключи, роли `admin`/`user`, суточные квоты запросов.
 - **Современный API**: построен на FastAPI с автоматической генерацией OpenAPI-документации.
 
 ## 🛠 Технологический стек
@@ -129,19 +130,48 @@ docker compose up --build
 
 Росреестр — ядро отчёта (собирается всегда), остальные источники включаются флагами; при недоступности источника соответствующая секция помечается как «данные недоступны».
 
+### Аутентификация и авторизация
+
+Все эндпоинты, кроме `POST /converter/xml-to-pdf`, `/auth/register`, `/auth/login` и служебных, требуют JWT (`Authorization: Bearer`) или активный API-ключ (`X-API-Key`).
+
+| Эндпоинт | Метод | Описание |
+| :--- | :--- | :--- |
+| `/auth/register` | `POST` | Регистрация пользователя |
+| `/auth/login` | `POST` | Вход и получение JWT |
+| `/auth/me` | `GET` | Текущий пользователь |
+| `/auth/api-keys` | `POST` | Создать API-ключ (полный ключ показывается один раз) |
+| `/auth/api-keys` | `GET` | Список своих ключей |
+| `/auth/api-keys/{id}` | `PATCH` | Активировать/деактивировать ключ |
+| `/auth/api-keys/{id}` | `DELETE` | Отозвать ключ |
+
+Админ-эндпоинты (роль `admin`):
+
+| Эндпоинт | Метод | Описание |
+| :--- | :--- | :--- |
+| `/admin/users` | `GET` | Список пользователей |
+| `/admin/users/{id}` | `GET/PATCH/DELETE` | Управление пользователем |
+| `/admin/api-keys` | `GET` | Все ключи |
+| `/admin/api-keys/{id}` | `DELETE` | Отозвать любой ключ |
+
+Настройки задаются в `.env` (см. `.env.example`): `DATABASE_URL`, `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `DEFAULT_DAILY_QUOTA` и др.
+
 ## 📂 Структура проекта
 
 ```text
 TerraData/
 ├── app/
-│   ├── api/                # Обработчики маршрутов API (rosreestr, converter, nspd, fias, sudrf, analytics)
-│   ├── models/             # ML-модели (pred.keras)
-│   └── services/           # Бизнес-логика (клиенты, конвертеры, координаты, агрегация отчётов, PDF)
+│   ├── api/                # Маршруты API (rosreestr, converter, nspd, fias, sudrf, analytics, auth, admin)
+│   ├── core/               # Конфигурация, БД, безопасность, зависимости авторизации
+│   ├── models/             # ORM-модели (User, ApiKey, UsageRecord) и ML-модель (pred.keras)
+│   ├── schemas/            # Pydantic-схемы
+│   └── services/           # Бизнес-логика (клиенты, auth_service, конвертеры, PDF)
 │       └── types/          # Словари типов
+├── alembic/                # Миграции схемы БД
 ├── docs/                   # Документация (MkDocs)
 ├── tests/                  # Тесты Pytest и моки
+├── .env.example            # Пример переменных окружения
 ├── Dockerfile              # Контейнеризация
-├── docker-compose.yml      # Конфигурация Docker Compose
+├── docker-compose.yml      # Конфигурация Docker Compose (app + PostgreSQL)
 ├── main.py                 # Точка входа FastAPI
 ├── requirements.txt        # Зависимости
 ├── mkdocs.yml              # Конфигурация документации
