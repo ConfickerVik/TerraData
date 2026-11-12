@@ -1,15 +1,18 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
+
+from app.services.address_cleaner import AddressCleaner
 from app.services.fias_client import FIASClient
 from app.services.sudrf_client import SudrfClient
-from app.services.address_cleaner import AddressCleaner
-from typing import Optional, Dict, Any
 
 router = APIRouter(prefix="/sudrf", tags=["SUDRF Data"])
 
 fias_client = FIASClient()
 sudrf_client = SudrfClient()
 
-async def _resolve_court_info(fias_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+
+async def _resolve_court_info(fias_data: dict[str, Any] | None) -> dict[str, Any] | None:
     """
     Вспомогательная функция для извлечения судебного участка из данных ФИАС.
     Реализует основную логику (по GUID дома) и fallback-логику (по адресу через Sudrf).
@@ -47,7 +50,8 @@ async def _resolve_court_info(fias_data: Optional[Dict[str, Any]]) -> Optional[D
 
     return None
 
-async def _check_resolve(fias_data: Optional[Dict[str, Any]] ) -> Optional[Dict[str, Any]]:
+
+async def _check_resolve(fias_data: dict[str, Any] | None) -> dict[str, Any] | None:
     # Извлекаем судебный участок
     court_info = await _resolve_court_info(fias_data)
 
@@ -55,17 +59,18 @@ async def _check_resolve(fias_data: Optional[Dict[str, Any]] ) -> Optional[Dict[
     court_ok = court_info is not None
 
     if not fias_ok and not court_ok:
-        raise HTTPException(status_code=404,
-                            detail="Сведения в ФИАС по данному кадастровому номеру не найдены и fallback-поиск не дал результата")
+        raise HTTPException(
+            status_code=404,
+            detail="Сведения в ФИАС по данному кадастровому номеру не найдены и fallback-поиск не дал результата",
+        )
 
-    return {
-        "court_info": court_info
-    }
+    return {"court_info": court_info}
+
 
 @router.get("/by-cadastral")
 async def get_court_by_cadastral(
     cad_num: str,
-    address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное")
+    address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное"),
 ):
     """
     Полный цикл: Кадастр -> ФИАС GUID -> Sudrf Суд.
@@ -75,10 +80,11 @@ async def get_court_by_cadastral(
 
     return court_info
 
+
 @router.get("/by-address")
 async def get_fias_by_cadastral(
-        address: str,
-        address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное")
+    address: str,
+    address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное"),
 ):
     """
     Полный цикл: Адрес -> ФИАС GUID -> Sudrf -> Суд.
@@ -93,10 +99,11 @@ async def get_fias_by_cadastral(
 
     return None
 
+
 @router.get("/by-object-id")
 async def get_fias_by_object_id(
     object_id: str,
-    address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное")
+    address_type: int = Query(1, description="1 - административное деление, 2 - муниципальное"),
 ):
     """
     Полный цикл: ObjectID -> ФИАС данные -> Sudrf -> Суд.
@@ -105,9 +112,9 @@ async def get_fias_by_object_id(
     court_info = await _resolve_court_info(fias_data)
 
     if not fias_data and not court_info:
-        raise HTTPException(status_code=404, detail="Сведения по ObjectID не найдены и fallback-поиск не дал результата")
+        raise HTTPException(
+            status_code=404,
+            detail="Сведения по ObjectID не найдены и fallback-поиск не дал результата",
+        )
 
-    return {
-        "fias_data": fias_data,
-        "court_info": court_info
-    }
+    return {"fias_data": fias_data, "court_info": court_info}

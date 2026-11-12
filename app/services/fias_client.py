@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import time
-from typing import List, Dict, Optional, Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import httpx
 
@@ -30,12 +31,12 @@ class FIASClient:
 
         # Кэш master-токена: запрашиваем его один раз и переиспользуем,
         # чтобы не упираться в rate-limit / временные баны по IP.
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._token_ts = 0.0
         self._token_ttl = 25 * 60  # секунд (токен ФИАС живёт ~30 минут)
         self._token_lock = asyncio.Lock()
 
-    async def get_master_token(self, force: bool = False) -> Optional[str]:
+    async def get_master_token(self, force: bool = False) -> str | None:
         """
         Получение master-токена для доступа к API ФИАС.
 
@@ -51,7 +52,9 @@ class FIASClient:
 
             for attempt in range(3):
                 try:
-                    async with httpx.AsyncClient(timeout=self.timeout, headers=_BROWSER_HEADERS) as session:
+                    async with httpx.AsyncClient(
+                        timeout=self.timeout, headers=_BROWSER_HEADERS
+                    ) as session:
                         response = await session.get(url)
 
                     if response.status_code == 200:
@@ -60,21 +63,25 @@ class FIASClient:
                             self._token = token
                             self._token_ts = time.monotonic()
                             return token
-                        logger.warning("GetSpasSettings вернул 200, но без Token: %.200s", response.text)
+                        logger.warning(
+                            "GetSpasSettings вернул 200, но без Token: %.200s", response.text
+                        )
                     else:
                         logger.warning(
                             "GetSpasSettings attempt=%d status=%s body=%.200s",
-                            attempt + 1, response.status_code, response.text,
+                            attempt + 1,
+                            response.status_code,
+                            response.text,
                         )
                 except Exception as e:
                     logger.warning("GetSpasSettings attempt=%d error: %s", attempt + 1, e)
 
                 if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)  # 1с, 2с
+                    await asyncio.sleep(2**attempt)  # 1с, 2с
 
             return None
 
-    async def _authorized_headers(self, force: bool = False) -> Optional[Dict[str, str]]:
+    async def _authorized_headers(self, force: bool = False) -> dict[str, str] | None:
         token = await self.get_master_token(force=force)
         if not token:
             return None
@@ -82,8 +89,8 @@ class FIASClient:
 
     async def _request_with_token(
         self,
-        request: Callable[[Dict[str, str]], Awaitable[httpx.Response]],
-    ) -> Optional[httpx.Response]:
+        request: Callable[[dict[str, str]], Awaitable[httpx.Response]],
+    ) -> httpx.Response | None:
         """
         Выполняет авторизованный запрос. При 401/403 один раз принудительно
         обновляет master-токен и повторяет. Возвращает None, если токен
@@ -106,14 +113,15 @@ class FIASClient:
 
         return response
 
-    async def get_object_id_by_cadastral_number(self, cadastral_number: str) -> Optional[str]:
+    async def get_object_id_by_cadastral_number(self, cadastral_number: str) -> str | None:
         """Получение уникального ObjectID по кадастровому номеру."""
         url = f"{self.base_url_nalog}/ExtendedSearch/GetObjectsByCadastralNumber"
         form = {"cadastralNumber": cadastral_number}
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                async def do(headers: Dict[str, str]) -> httpx.Response:
+
+                async def do(headers: dict[str, str]) -> httpx.Response:
                     return await session.post(url, data=form, headers=headers)
 
                 response = await self._request_with_token(do)
@@ -131,7 +139,7 @@ class FIASClient:
             logger.error(f"Error getting object ID by cadastral: {e}")
             return None
 
-    async def get_address_hints(self, address: str) -> List[Dict[str, Any]]:
+    async def get_address_hints(self, address: str) -> list[dict[str, Any]]:
         """
         Получение списка всех подходящих вариантов адресов (подсказок).
         Возвращает список словарей с object_id и текстовым представлением.
@@ -145,7 +153,8 @@ class FIASClient:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                async def do(headers: Dict[str, str]) -> httpx.Response:
+
+                async def do(headers: dict[str, str]) -> httpx.Response:
                     return await session.post(url, json=payload, headers=headers)
 
                 response = await self._request_with_token(do)
@@ -183,7 +192,8 @@ class FIASClient:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as session:
-                async def do(headers: Dict[str, str]) -> httpx.Response:
+
+                async def do(headers: dict[str, str]) -> httpx.Response:
                     return await session.get(url, headers=headers)
 
                 response = await self._request_with_token(do)
@@ -207,7 +217,7 @@ class FIASClient:
 
         return data
 
-    async def get_object_details(self, object_id: str) -> Optional[Dict[str, Any]]:
+    async def get_object_details(self, object_id: str) -> dict[str, Any] | None:
         """
         Получение дополнительной информации об объекте недвижимости по ObjectID
         (реестровый номер, даты начала/обновления, федеральный округ и т.д.).
@@ -218,7 +228,9 @@ class FIASClient:
                 response = await session.get(url)
             if response.status_code == 200:
                 return response.json()
-            logger.warning("ObjectDetails status=%s body=%.200s", response.status_code, response.text)
+            logger.warning(
+                "ObjectDetails status=%s body=%.200s", response.status_code, response.text
+            )
         except Exception as e:
             logger.error(f"Error getting object details: {e}")
         return None

@@ -1,22 +1,27 @@
-import httpx
 import json
 import logging
-from typing import Dict, Optional, Any
+from typing import Any
+
+import httpx
 
 from app.services.types.court_types import COURT_TYPE_ORDER
 
 logger = logging.getLogger(__name__)
 
+
 class SudrfClient:
     """
     Сервис для взаимодействия с API sudrf.ru для получения данных о судебных участках.
     """
+
     def __init__(self, timeout=30.0):
         self.timeout = timeout
         self.base_url = "https://sudrf.ru/api.php"
         self.suggest_url = "https://sudrf.ru/suggestions/api/4_1/rs/suggest/address"
 
-    async def get_court_by_fias_id(self, fias_id: str, region_code: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_court_by_fias_id(
+        self, fias_id: str, region_code: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Получение списка судов по FIAS ID (GUID).
         Метод: getCourtListByFiasCode.
@@ -40,7 +45,7 @@ class SudrfClient:
 
             # Собираем все суды: плоские записи списка + вложенные
             # вышестоящие суды (KJ, AJ, OS, AV, KV, OV). Дедуплицируем по VNKOD.
-            collected: Dict[str, Dict[str, Any]] = {}
+            collected: dict[str, dict[str, Any]] = {}
             for entry in courts_list:
                 if not isinstance(entry, dict):
                     continue
@@ -56,17 +61,25 @@ class SudrfClient:
             # Тип суда закодирован в VNKOD (позиции 2-3): MS, RS, OS, AJ, KJ, ...
             courts = []
             for vncod, entry in collected.items():
-                courts.append({
-                    "type": vncod[2:4] if len(vncod) >= 4 else vncod,
-                    "vncod": vncod,
-                    "name": entry.get("ZNACHATR", ""),
-                    "address": entry.get("ADDRESS", ""),
-                    "url": entry.get("PRIM", ""),
-                })
+                courts.append(
+                    {
+                        "type": vncod[2:4] if len(vncod) >= 4 else vncod,
+                        "vncod": vncod,
+                        "name": entry.get("ZNACHATR", ""),
+                        "address": entry.get("ADDRESS", ""),
+                        "url": entry.get("PRIM", ""),
+                    }
+                )
 
             # Порядок вывода: мировой участок -> районный -> областной ->
             # апелляционный -> кассационный -> военные суды.
-            courts.sort(key=lambda c: COURT_TYPE_ORDER.index(c["type"]) if c["type"] in COURT_TYPE_ORDER else len(COURT_TYPE_ORDER))
+            courts.sort(
+                key=lambda c: (
+                    COURT_TYPE_ORDER.index(c["type"])
+                    if c["type"] in COURT_TYPE_ORDER
+                    else len(COURT_TYPE_ORDER)
+                )
+            )
 
             # Основной суд по умолчанию — судебный участок (MS), иначе первый.
             main_court = next((c for c in courts if c["type"] == "MS"), courts[0])
@@ -80,7 +93,7 @@ class SudrfClient:
             logger.error(f"Error getting court by fias_id {fias_id}: {e}")
         return None
 
-    async def get_fias_id_by_address(self, address: str) -> Optional[str]:
+    async def get_fias_id_by_address(self, address: str) -> str | None:
         """
         Поиск fias_id через внутренний сервис подсказок sudrf.ru.
         Используется как fallback-метод, если основной поиск ФИАС не дал результата.
@@ -88,7 +101,7 @@ class SudrfClient:
         payload = {
             "query": address,
             "from_bound": {"value": "region"},
-            "to_bound": {"value": "house"}
+            "to_bound": {"value": "house"},
         }
 
         try:

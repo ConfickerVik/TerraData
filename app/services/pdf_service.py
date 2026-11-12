@@ -4,22 +4,22 @@ from datetime import datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    SimpleDocTemplate,
     Paragraph,
+    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 from app.services.types.court_types import court_type_label
+from app.services.types.nspd_types import _NSPD_CATEGORY_LABELS, _NSPD_FIELDS, _NSPD_TABS
 from app.services.types.obj_types import obj_type_label
 from app.services.types.purpose_types import purpose_type_label
-from app.services.types.nspd_types import _NSPD_CATEGORY_LABELS, _NSPD_FIELDS, _NSPD_TABS
 
 # Кандидаты TTF-шрифтов с поддержкой кириллицы (в порядке приоритета).
 # Стандартные шрифты ReportLab (Helvetica и т.п.) НЕ содержат кириллицу,
@@ -33,8 +33,6 @@ _FONT_CANDIDATES = [
 ]
 
 _DATA_UNAVAILABLE = "данные недоступны"
-
-
 
 
 def _nspd_category_id(base_info: dict):
@@ -194,17 +192,24 @@ class PDFService:
         if not rows:
             return Paragraph(_DATA_UNAVAILABLE, self._body())
 
-        table_data = [[Paragraph(f"<b>{k}</b>", self._body()), Paragraph(str(v), self._body())] for k, v in rows]
+        table_data = [
+            [Paragraph(f"<b>{k}</b>", self._body()), Paragraph(str(v), self._body())]
+            for k, v in rows
+        ]
         table = Table(table_data, colWidths=[60 * mm, 110 * mm])
-        table.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
         return table
 
     def _spatial_paragraph(self, spatial):
@@ -265,27 +270,33 @@ class PDFService:
         for i, pt in enumerate(ring, start=1):
             if not isinstance(pt, (list, tuple)) or len(pt) < 2:
                 continue
-            rows.append([
-                Paragraph(str(i), self._body()),
-                Paragraph(self._fmt_coord(pt[0]), self._body()),
-                Paragraph(self._fmt_coord(pt[1]), self._body()),
-            ])
+            rows.append(
+                [
+                    Paragraph(str(i), self._body()),
+                    Paragraph(self._fmt_coord(pt[0]), self._body()),
+                    Paragraph(self._fmt_coord(pt[1]), self._body()),
+                ]
+            )
 
         if len(rows) == 1:
             # Только заголовок — координат нет.
             return Paragraph(_DATA_UNAVAILABLE, self._body())
 
         table = Table(rows, colWidths=[20 * mm, 75 * mm, 75 * mm])
-        table.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f5")),
-            ("ALIGN", (0, 0), (0, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f5")),
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
         return table
 
     @staticmethod
@@ -434,12 +445,13 @@ class PDFService:
         flowables = []
         for addr in addresses:
             if addr.get("full_name"):
-                flowables.append(
-                    Paragraph(f"Полный адрес: {addr['full_name']}", self._body())
-                )
+                flowables.append(Paragraph(f"Полный адрес: {addr['full_name']}", self._body()))
             if addr.get("address_type") is not None:
                 flowables.append(
-                    Paragraph(f"Деление: {'Административное деление' if addr['address_type'] == 1 else 'Муниципальное'}", self._body())
+                    Paragraph(
+                        f"Деление: {'Административное деление' if addr['address_type'] == 1 else 'Муниципальное'}",
+                        self._body(),
+                    )
                 )
             if addr.get("object_id") is not None:
                 flowables.append(
@@ -447,39 +459,29 @@ class PDFService:
                 )
             if addr.get("object_guid") is not None:
                 flowables.append(
-                    Paragraph(f"Уникальный номер в ГАР (ID FIAS): {addr['object_guid']}", self._body())
+                    Paragraph(
+                        f"Уникальный номер в ГАР (ID FIAS): {addr['object_guid']}", self._body()
+                    )
                 )
 
             address_detail = addr.get("address_detail", {})
             if address_detail.get("postal_code") is not None:
-                flowables.append(
-                    Paragraph(f"Почтовый индекс: {addr['postal_code']}", self._body())
-                )
+                flowables.append(Paragraph(f"Почтовый индекс: {addr['postal_code']}", self._body()))
 
             if address_detail.get("okato") is not None:
-                flowables.append(
-                    Paragraph(f"ОКАТО: {addr['okato']}", self._body())
-                )
+                flowables.append(Paragraph(f"ОКАТО: {addr['okato']}", self._body()))
             if address_detail.get("oktmo") is not None:
-                flowables.append(
-                    Paragraph(f"ОКТМО код: {addr['oktmo']}", self._body())
-                )
+                flowables.append(Paragraph(f"ОКТМО код: {addr['oktmo']}", self._body()))
             if address_detail.get("oktmo_budget") is not None:
                 flowables.append(
                     Paragraph(f"ОКТМО бюджетополучателя: {addr['oktmo_budget']}", self._body())
                 )
             if address_detail.get("postal_code") is not None:
-                flowables.append(
-                    Paragraph(f"Почтовый код: {addr['postal_code']}", self._body())
-                )
+                flowables.append(Paragraph(f"Почтовый код: {addr['postal_code']}", self._body()))
             if address_detail.get("ifns_fl") is not None:
-                flowables.append(
-                    Paragraph(f"Налоговый орган ФЛ: {addr['ifns_fl']}", self._body())
-                )
+                flowables.append(Paragraph(f"Налоговый орган ФЛ: {addr['ifns_fl']}", self._body()))
             if address_detail.get("ifns_ul") is not None:
-                flowables.append(
-                    Paragraph(f"Налоговый орган ЮЛ: {addr['ifns_ul']}", self._body())
-                )
+                flowables.append(Paragraph(f"Налоговый орган ЮЛ: {addr['ifns_ul']}", self._body()))
 
             hierarchy = addr.get("hierarchy", [])
             if hierarchy:

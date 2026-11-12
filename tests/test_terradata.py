@@ -65,9 +65,7 @@ def test_get_center_polygon():
 
 
 def test_convert_geometry_point():
-    result = CoordsConverter.convert_geometry(
-        {"type": "Point", "coordinates": [0.0, 0.0]}
-    )
+    result = CoordsConverter.convert_geometry({"type": "Point", "coordinates": [0.0, 0.0]})
     assert result["type"] == "Point"
     # GeoJSON стандарт: [lon, lat]
     assert result["coordinates"] == [0.0, 0.0]
@@ -77,12 +75,14 @@ def test_convert_geometry_point():
 def test_convert_geometry_polygon_structure():
     """Проверка структуры Polygon: тип, наличие контура и центра."""
     polygon = [
-        [[1000000.0, 1000000.0], [1000100.0, 1000000.0],
-         [1000100.0, 1000100.0], [1000000.0, 1000000.0]]
+        [
+            [1000000.0, 1000000.0],
+            [1000100.0, 1000000.0],
+            [1000100.0, 1000100.0],
+            [1000000.0, 1000000.0],
+        ]
     ]
-    result = CoordsConverter.convert_geometry(
-        {"type": "Polygon", "coordinates": polygon}
-    )
+    result = CoordsConverter.convert_geometry({"type": "Polygon", "coordinates": polygon})
     assert result["type"] == "Polygon"
     assert len(result["coordinates"]) == 4
     assert "center" in result
@@ -142,7 +142,9 @@ def test_normalize_cadastral_short(rosreestr_client):
 
 def test_normalize_cadastral_two_digit_region_unchanged(rosreestr_client):
     """Первая часть из 2 символов (типичный регион) -> номер не изменяется."""
-    assert rosreestr_client._normalize_cadastral_number("38:00:000000:00001") == "38:00:000000:00001"
+    assert (
+        rosreestr_client._normalize_cadastral_number("38:00:000000:00001") == "38:00:000000:00001"
+    )
 
 
 def test_normalize_cadastral_long_first_part_strips_zeros(rosreestr_client):
@@ -163,8 +165,14 @@ from app.services.address_cleaner import AddressCleaner
 
 
 def test_address_cleaner_basic():
-    assert AddressCleaner.clean("г. Иркутск, ул. Ленина, д. 10, кв. 5") == "г. Иркутск, ул. Ленина, д. 10"
-    assert AddressCleaner.clean("Иркутская обл, г. Иркутск, ул. Мира, д. 1, пом. 2") == "Иркутская обл, г. Иркутск, ул. Мира, д. 1"
+    assert (
+        AddressCleaner.clean("г. Иркутск, ул. Ленина, д. 10, кв. 5")
+        == "г. Иркутск, ул. Ленина, д. 10"
+    )
+    assert (
+        AddressCleaner.clean("Иркутская обл, г. Иркутск, ул. Мира, д. 1, пом. 2")
+        == "Иркутская обл, г. Иркутск, ул. Мира, д. 1"
+    )
     assert AddressCleaner.clean(None) is None
     assert AddressCleaner.clean("   ") == ""
 
@@ -240,7 +248,9 @@ from app.services.sudrf_client import SudrfClient
 @patch("httpx.AsyncClient.get")
 async def test_sudrf_get_court_success(mock_get):
     mock_get.return_value.status_code = 200
-    mock_get.return_value.text = '{"list": [{"VNKOD": "12MS0000", "ZNACHATR": "Судебный участок №1"}]}'
+    mock_get.return_value.text = (
+        '{"list": [{"VNKOD": "12MS0000", "ZNACHATR": "Судебный участок №1"}]}'
+    )
     sudrf = SudrfClient()
     res = await sudrf.get_court_by_fias_id("some_guid")
     assert res["court_name"] == "Судебный участок №1"
@@ -282,7 +292,12 @@ def test_nspd_get_category_id():
 from app.api.rosreestr import client as rr_client
 
 
-@patch.object(rr_client, "get_full_info", new_callable=AsyncMock, return_value={"elements": [{"cadNumber": "38:00:000000:00001", "area": "44.80"}]})
+@patch.object(
+    rr_client,
+    "get_full_info",
+    new_callable=AsyncMock,
+    return_value={"elements": [{"cadNumber": "38:00:000000:00001", "area": "44.80"}]},
+)
 def test_rosreestr_info_mock(mocked_method):
     response = client.get("/rosreestr/info?cad_num=38:00:000000:00001")
     assert response.status_code == 200
@@ -297,7 +312,12 @@ def test_rosreestr_info_not_found(mocked_method):
     mocked_method.assert_called_once()
 
 
-@patch.object(rr_client, "search_by_address", new_callable=AsyncMock, return_value={"results": ["38:00:000000:00001"]})
+@patch.object(
+    rr_client,
+    "search_by_address",
+    new_callable=AsyncMock,
+    return_value={"results": ["38:00:000000:00001"]},
+)
 def test_rosreestr_search_address_mock(mocked_method):
     response = client.get("/rosreestr/search-address?address=ул. Тестовая")
     assert response.status_code == 200
@@ -368,14 +388,21 @@ def test_converter_xml_to_pdf_wrong_extension():
 from app.api.nspd import nspd_client
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value={"data": {"features": [{"properties": {"category": 36369}}]}})
+@patch.object(
+    nspd_client,
+    "get_property_cadastral_price",
+    new_callable=AsyncMock,
+    return_value={"data": {"features": [{"properties": {"category": 36369}}]}},
+)
 def test_nspd_cadastral_price_mock(mocked_method):
     response = client.get("/nspd/cadastral-price?cad_num=38:00:000000:00001")
     assert response.status_code == 200
     assert response.json() == {"data": {"features": [{"properties": {"category": 36369}}]}}
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None)
+@patch.object(
+    nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None
+)
 def test_nspd_cadastral_price_not_found(mocked_method):
     response = client.get("/nspd/cadastral-price?cad_num=00:00:000000:00000")
     assert response.status_code == 404
@@ -388,7 +415,14 @@ BASE_INFO_BUILDING = {
                 "id": 100,
                 "geometry": {
                     "type": "Polygon",
-                    "coordinates": [[[1000000.0, 1000000.0], [1000100.0, 1000000.0], [1000100.0, 1000100.0], [1000000.0, 1000000.0]]],
+                    "coordinates": [
+                        [
+                            [1000000.0, 1000000.0],
+                            [1000100.0, 1000000.0],
+                            [1000100.0, 1000100.0],
+                            [1000000.0, 1000000.0],
+                        ]
+                    ],
                 },
                 "properties": {
                     "category": 36369,
@@ -400,11 +434,18 @@ BASE_INFO_BUILDING = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_BUILDING)
+@patch.object(
+    nspd_client,
+    "get_property_cadastral_price",
+    new_callable=AsyncMock,
+    return_value=BASE_INFO_BUILDING,
+)
 @patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock, return_value={"rooms": 10})
 @patch.object(nspd_client, "get_land_links", new_callable=AsyncMock, return_value={"land": "OK"})
 @patch.object(nspd_client, "get_build_parts", new_callable=AsyncMock, return_value={"parts": "OK"})
-@patch.object(nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"perm": "OK"})
+@patch.object(
+    nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"perm": "OK"}
+)
 def test_nspd_full_property_building_comprehensive(*_):
     """Глубокий тест для Здания: проверка всей цепочки и нормализации геометрии"""
     response = client.get("/nspd/property?cad_num=38:36:000000:111")
@@ -436,11 +477,24 @@ BASE_INFO_LAND = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_LAND)
-@patch.object(nspd_client, "get_land_objects_list", new_callable=AsyncMock, return_value={"land_objs": "OK"})
-@patch.object(nspd_client, "get_land_permission_types", new_callable=AsyncMock, return_value={"land_perm": "OK"})
-@patch.object(nspd_client, "get_land_parts", new_callable=AsyncMock, return_value={"land_parts": "OK"})
-@patch.object(nspd_client, "get_land_composition", new_callable=AsyncMock, return_value={"land_comp": "OK"})
+@patch.object(
+    nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_LAND
+)
+@patch.object(
+    nspd_client, "get_land_objects_list", new_callable=AsyncMock, return_value={"land_objs": "OK"}
+)
+@patch.object(
+    nspd_client,
+    "get_land_permission_types",
+    new_callable=AsyncMock,
+    return_value={"land_perm": "OK"},
+)
+@patch.object(
+    nspd_client, "get_land_parts", new_callable=AsyncMock, return_value={"land_parts": "OK"}
+)
+@patch.object(
+    nspd_client, "get_land_composition", new_callable=AsyncMock, return_value={"land_comp": "OK"}
+)
 def test_nspd_full_property_land_comprehensive(*_):
     """Глубокий тест для Земельного участка: проверка всех специфичных полей"""
     response = client.get("/nspd/property?cad_num=38:36:000000:222")
@@ -466,7 +520,12 @@ BASE_INFO_PREMISES = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_PREMISES)
+@patch.object(
+    nspd_client,
+    "get_property_cadastral_price",
+    new_callable=AsyncMock,
+    return_value=BASE_INFO_PREMISES,
+)
 @patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock)
 def test_nspd_full_property_premises_mock(mock_details, *_):
     """Тест получения данных для Помещения (37163) - детали не должны запрашиваться"""
@@ -493,11 +552,18 @@ BASE_INFO_CHAIN = {
 }
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=BASE_INFO_CHAIN)
+@patch.object(
+    nspd_client,
+    "get_property_cadastral_price",
+    new_callable=AsyncMock,
+    return_value=BASE_INFO_CHAIN,
+)
 @patch.object(nspd_client, "get_objects_list", new_callable=AsyncMock, return_value=None)
 @patch.object(nspd_client, "get_land_links", new_callable=AsyncMock, return_value={"ok": True})
 @patch.object(nspd_client, "get_build_parts", new_callable=AsyncMock, return_value={"ok": True})
-@patch.object(nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"ok": True})
+@patch.object(
+    nspd_client, "get_permission_types", new_callable=AsyncMock, return_value={"ok": True}
+)
 def test_nspd_api_failure_during_chain(*_):
     """Тест поведения при ошибке в одном из параллельных запросов деталей"""
     response = client.get("/nspd/property?cad_num=38:36:000000:111")
@@ -507,7 +573,9 @@ def test_nspd_api_failure_during_chain(*_):
     assert data["details"]["land_links"] == {"ok": True}
 
 
-@patch.object(nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None)
+@patch.object(
+    nspd_client, "get_property_cadastral_price", new_callable=AsyncMock, return_value=None
+)
 def test_nspd_full_property_not_found(mocked_method):
     response = client.get("/nspd/property?cad_num=00:00:000000:00000")
     assert response.status_code == 404
@@ -545,7 +613,9 @@ def test_fias_by_object_id_not_found():
     assert response.status_code == 404
 
 
-@patch.object(api_fias_client, "get_object_id_by_cadastral_number", new=AsyncMock(return_value=None))
+@patch.object(
+    api_fias_client, "get_object_id_by_cadastral_number", new=AsyncMock(return_value=None)
+)
 def test_fias_object_id_not_found():
     response = client.get("/fias/object-id-by-cadastral?cad_num=000:00:0000")
     assert response.status_code == 404
@@ -639,7 +709,6 @@ def test_api_by_object_id_success(mock_get_court, mock_fias):
 # =============================================================================
 
 from app.services.report_service import ReportService
-from app.services.pdf_service import PDFService
 
 
 @pytest.fixture
@@ -746,9 +815,7 @@ async def test_report_service_optional_disabled(report_service):
 async def test_report_service_partial_failure(report_service):
     """Один источник падает -> его секция None, остальные заполнены."""
     report_service.rosreestr.get_full_info = AsyncMock(return_value=ROSREESTR_RESPONSE)
-    report_service.nspd.get_property_cadastral_price = AsyncMock(
-        side_effect=Exception("NSPD down")
-    )
+    report_service.nspd.get_property_cadastral_price = AsyncMock(side_effect=Exception("NSPD down"))
     report_service.fias.search_fias_by_cadastral = AsyncMock(
         return_value={"addresses": [{"full_name": "г. Иркутск", "hierarchy": []}]}
     )
@@ -780,9 +847,17 @@ def test_pdf_service_generates_bytes():
             "cad_cost": "3269726.66",
             "cad_cost_date": 1672531200000,
         },
-        "spatial": {"geometry": {"type": "Point", "center": [52.0, 104.0], "coordinates": [104.0, 52.0]}},
+        "spatial": {
+            "geometry": {"type": "Point", "center": [52.0, 104.0], "coordinates": [104.0, 52.0]}
+        },
         "legal": {
-            "rights": [{"rightTypeDesc": "Собственность", "rightRegDate": 1576195200000, "rightNumber": "38:1"}],
+            "rights": [
+                {
+                    "rightTypeDesc": "Собственность",
+                    "rightRegDate": 1576195200000,
+                    "rightNumber": "38:1",
+                }
+            ],
             "encumbrances": [],
         },
         "fias": {"addresses": [{"full_name": "г. Иркутск", "object_id": "123", "hierarchy": []}]},
@@ -814,4 +889,3 @@ def test_pdf_service_empty_sections():
 def test_pdf_service_empty_report():
     """Пустой отчёт (без cad_num и address) -> False."""
     assert PDFService().generate_report({"general": {}}) is False
-

@@ -1,4 +1,5 @@
 """FastAPI-зависимости аутентификации, авторизации и квот."""
+
 from datetime import date, datetime, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -77,9 +78,7 @@ async def _enforce_quota(db: AsyncSession, user: User) -> None:
     today = date.today()
     record = (
         await db.execute(
-            select(UsageRecord).where(
-                UsageRecord.user_id == user.id, UsageRecord.date == today
-            )
+            select(UsageRecord).where(UsageRecord.user_id == user.id, UsageRecord.date == today)
         )
     ).scalar_one_or_none()
     if record is None:
