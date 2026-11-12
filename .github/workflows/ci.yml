@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        # Версия дублирует pin из requirements-dev.txt; ставим только ruff,
+        # чтобы не тянуть тяжёлый TensorFlow ради линтера.
+        run: pip install ruff==0.17.4
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: "requirements*.txt"
+
+      - name: Install Python dependencies
+        # requirements-dev.txt включает runtime-зависимости через `-r requirements.txt`
+        # (в т.ч. tensorflow-cpu — установка тяжёлая, поэтому важен pip-cache).
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: pytest --cov=app --cov-report=xml --cov-report=term-missing
+
+  migrations:
+    name: Alembic migrations (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: terradata
+          POSTGRES_PASSWORD: terradata
+          POSTGRES_DB: terradata
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U terradata -d terradata"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: "requirements*.txt"
+
+      - name: Install DB dependencies
+        # Минимальный набор для alembic/env.py (он импортирует app.core.config и app.models,
+        # но НЕ FastAPI/TensorFlow), чтобы не ставить весь requirements.txt.
+        run: pip install "sqlalchemy[asyncio]==2.0.36" "asyncpg==0.30.0" "greenlet==3.1.1" "alembic==1.14.0" "pydantic-settings==2.6.1"
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://terradata:terradata@localhost:5432/terradata
+        run: alembic upgrade head

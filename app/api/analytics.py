@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
-from app.services.report_service import ReportService
 from app.services.pdf_service import PDFService
+from app.services.report_service import ReportService
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -42,7 +42,5 @@ async def generate_report(request: ReportRequest):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=report_{request.cad_num}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=report_{request.cad_num}.pdf"},
     )

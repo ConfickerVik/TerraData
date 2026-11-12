@@ -1,5 +1,6 @@
 """Асинхронный движок SQLAlchemy и фабрика сессий."""
-from typing import AsyncIterator
+
+from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,

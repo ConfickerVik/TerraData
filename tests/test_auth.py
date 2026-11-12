@@ -1,4 +1,5 @@
 """Тесты аутентификации, авторизации, API-ключей, ролей и квот (Фаза 5)."""
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -7,9 +8,9 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import require_admin, require_auth
-from main import app
 from app.models.base import Base
 from app.services import auth_service
+from main import app
 
 
 @pytest.fixture
@@ -41,14 +42,10 @@ async def client(db_engine):
 
 
 async def _register_and_key(client: AsyncClient, username: str) -> tuple[str, str]:
-    r = await client.post(
-        "/auth/register", json={"username": username, "password": "secret123"}
-    )
+    r = await client.post("/auth/register", json={"username": username, "password": "secret123"})
     assert r.status_code == 201, r.text
     token = (
-        await client.post(
-            "/auth/login", json={"username": username, "password": "secret123"}
-        )
+        await client.post("/auth/login", json={"username": username, "password": "secret123"})
     ).json()["access_token"]
     key = (
         await client.post(
@@ -64,18 +61,14 @@ async def _register_and_key(client: AsyncClient, username: str) -> tuple[str, st
 
 
 async def test_register_and_login(client):
-    r = await client.post(
-        "/auth/register", json={"username": "alice", "password": "secret123"}
-    )
+    r = await client.post("/auth/register", json={"username": "alice", "password": "secret123"})
     assert r.status_code == 201
     body = r.json()
     assert body["username"] == "alice"
     assert body["role"] == "user"
     assert "password_hash" not in body
 
-    r = await client.post(
-        "/auth/login", json={"username": "alice", "password": "secret123"}
-    )
+    r = await client.post("/auth/login", json={"username": "alice", "password": "secret123"})
     assert r.status_code == 200
     assert r.json()["access_token"]
 
@@ -129,11 +122,7 @@ async def test_api_key_lifecycle(client):
     headers = {"X-API-Key": key}
     assert (await client.get("/auth/me", headers=headers)).status_code == 200
 
-    keys = (
-        await client.get(
-            "/auth/api-keys", headers={"Authorization": f"Bearer {token}"}
-        )
-    ).json()
+    keys = (await client.get("/auth/api-keys", headers={"Authorization": f"Bearer {token}"})).json()
     assert len(keys) == 1
     key_id = keys[0]["id"]
     # Маскированный вывод: полный ключ повторно не возвращается.
@@ -151,11 +140,7 @@ async def test_api_key_lifecycle(client):
         f"/auth/api-keys/{key_id}", headers={"Authorization": f"Bearer {token}"}
     )
     assert r.status_code == 204
-    keys = (
-        await client.get(
-            "/auth/api-keys", headers={"Authorization": f"Bearer {token}"}
-        )
-    ).json()
+    keys = (await client.get("/auth/api-keys", headers={"Authorization": f"Bearer {token}"})).json()
     assert keys == []
 
 
@@ -165,9 +150,7 @@ async def test_api_key_lifecycle(client):
 async def test_user_cannot_access_admin(client):
     await client.post("/auth/register", json={"username": "frank", "password": "secret123"})
     token = (
-        await client.post(
-            "/auth/login", json={"username": "frank", "password": "secret123"}
-        )
+        await client.post("/auth/login", json={"username": "frank", "password": "secret123"})
     ).json()["access_token"]
     r = await client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
@@ -179,9 +162,7 @@ async def test_admin_can_list_users(client, db_engine):
         await auth_service.create_user(session, "admin1", "secret123", role="admin")
 
     token = (
-        await client.post(
-            "/auth/login", json={"username": "admin1", "password": "secret123"}
-        )
+        await client.post("/auth/login", json={"username": "admin1", "password": "secret123"})
     ).json()["access_token"]
     r = await client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
@@ -197,9 +178,7 @@ async def test_quota_exceeded_429(client, db_engine):
         await auth_service.create_user(session, "quota1", "secret123", request_limit=2)
 
     token = (
-        await client.post(
-            "/auth/login", json={"username": "quota1", "password": "secret123"}
-        )
+        await client.post("/auth/login", json={"username": "quota1", "password": "secret123"})
     ).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 

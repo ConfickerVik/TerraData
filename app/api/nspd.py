@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from app.services.nspd_client import NspdClient
+
 from app.services.coords_converter import CoordsConverter
-from typing import Dict, Any, Optional
+from app.services.nspd_client import NspdClient
 
 router = APIRouter(prefix="/nspd", tags=["NSPD Data"])
 
 nspd_client = NspdClient()
+
 
 @router.get("/cadastral-price")
 async def get_cadastral_price(cad_num: str):
@@ -15,8 +16,11 @@ async def get_cadastral_price(cad_num: str):
     """
     data = await nspd_client.get_property_cadastral_price(cad_num)
     if not data:
-        raise HTTPException(status_code=404, detail="Сведения о кадастровой стоимости в НСПД не найдены")
+        raise HTTPException(
+            status_code=404, detail="Сведения о кадастровой стоимости в НСПД не найдены"
+        )
     return data
+
 
 @router.get("/property")
 async def get_full_property_data(cad_num: str):
@@ -38,7 +42,9 @@ async def get_full_property_data(cad_num: str):
         if geometry:
             normalized_geom = CoordsConverter.convert_geometry(geometry)
     except (KeyError, IndexError) as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при разборе структуры данных НСПД: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Ошибка при разборе структуры данных НСПД: {str(e)}"
+        ) from e
 
     # --- Категорийные вкладки (tab) ---
     details = await nspd_client.collect_details(base_info)
@@ -58,27 +64,37 @@ async def get_full_property_data(cad_num: str):
         "message": "Детальные карточки доступны только для Зданий и Земельных участков",
     }
 
+
 # Оставляем отдельные методы для гибкости в подпути /details
 @router.get("/details/objects-list")
-async def get_objects_list(objdocId: int, registersId: Optional[int] = None, categoryId: int = 36369):
+async def get_objects_list(objdocId: int, registersId: int | None = None, categoryId: int = 36369):
     data = await nspd_client.get_objects_list(objdocId, registersId, categoryId)
-    if not data: raise HTTPException(status_code=404, detail="Данные не найдены")
+    if not data:
+        raise HTTPException(status_code=404, detail="Данные не найдены")
     return data
+
 
 @router.get("/details/land-links")
-async def get_land_links(objdocId: int, registersId: Optional[int] = None, categoryId: int = 36369):
+async def get_land_links(objdocId: int, registersId: int | None = None, categoryId: int = 36369):
     data = await nspd_client.get_land_links(objdocId, registersId, categoryId)
-    if not data: raise HTTPException(status_code=404, detail="Данные не найдены")
+    if not data:
+        raise HTTPException(status_code=404, detail="Данные не найдены")
     return data
+
 
 @router.get("/details/build-parts")
-async def get_build_parts(objdocId: int, registersId: Optional[int] = None, categoryId: int = 36369):
+async def get_build_parts(objdocId: int, registersId: int | None = None, categoryId: int = 36369):
     data = await nspd_client.get_build_parts(objdocId, registersId, categoryId)
-    if not data: raise HTTPException(status_code=404, detail="Данные не найдены")
+    if not data:
+        raise HTTPException(status_code=404, detail="Данные не найдены")
     return data
 
+
 @router.get("/details/permission-types")
-async def get_permission_types(objdocId: int, registersId: Optional[int] = None, categoryId: int = 36369):
+async def get_permission_types(
+    objdocId: int, registersId: int | None = None, categoryId: int = 36369
+):
     data = await nspd_client.get_permission_types(objdocId, registersId, categoryId)
-    if not data: raise HTTPException(status_code=404, detail="Данные не найдены")
+    if not data:
+        raise HTTPException(status_code=404, detail="Данные не найдены")
     return data

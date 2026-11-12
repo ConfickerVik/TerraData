@@ -1,4 +1,5 @@
 """Бизнес-логика аутентификации и управления пользователями/ключами."""
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +15,7 @@ from app.models import ApiKey, User
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    return (
-        await db.execute(select(User).where(User.username == username))
-    ).scalar_one_or_none()
+    return (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
@@ -44,9 +43,7 @@ async def create_user(
     return user
 
 
-async def authenticate_user(
-    db: AsyncSession, username: str, password: str
-) -> User | None:
+async def authenticate_user(db: AsyncSession, username: str, password: str) -> User | None:
     user = await get_user_by_username(db, username)
     if not user or not user.is_active or not verify_password(password, user.password_hash):
         return None
@@ -65,9 +62,7 @@ async def create_api_key(db: AsyncSession, user: User, name: str) -> tuple[ApiKe
 async def list_api_keys(db: AsyncSession, user: User) -> list[ApiKey]:
     return list(
         (
-            await db.execute(
-                select(ApiKey).where(ApiKey.user_id == user.id).order_by(ApiKey.id)
-            )
+            await db.execute(select(ApiKey).where(ApiKey.user_id == user.id).order_by(ApiKey.id))
         ).scalars()
     )
 

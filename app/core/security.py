@@ -1,4 +1,5 @@
 """Криптографические утилиты: пароли, JWT, API-ключи."""
+
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone

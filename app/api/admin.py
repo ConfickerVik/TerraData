@@ -45,13 +45,21 @@ async def update_user(
 
     if payload.role is not None:
         if payload.role not in (ROLE_ADMIN, ROLE_USER):
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Недопустимая роль")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Недопустимая роль"
+            )
         if user.id == admin_user.id and payload.role != ROLE_ADMIN:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя понизить собственную роль администратора")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя понизить собственную роль администратора",
+            )
         user.role = payload.role
     if payload.is_active is not None:
         if user.id == admin_user.id and not payload.is_active:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя деактивировать собственный аккаунт")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя деактивировать собственный аккаунт",
+            )
         user.is_active = payload.is_active
     if payload.request_limit is not None:
         user.request_limit = payload.request_limit
@@ -68,7 +76,9 @@ async def delete_user(
     admin_user: User = Depends(require_admin),
 ):
     if user_id == admin_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя удалить собственный аккаунт")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя удалить собственный аккаунт"
+        )
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")

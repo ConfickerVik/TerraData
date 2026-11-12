@@ -32,7 +32,10 @@ _NSPD_FIELDS = {
         ("Декларированная площадь", ["declared_area"]),
         ("Уточнённая площадь", ["specified_area"]),
         ("Вид / тип ЗУ", ["land_record_type", "land_record_subtype", "land_record_category_type"]),
-        ("Вид разрешённого использования", ["permitted_use_established_by_document", "permitted_use_name"]),
+        (
+            "Вид разрешённого использования",
+            ["permitted_use_established_by_document", "permitted_use_name"],
+        ),
         ("Кадастровая стоимость", ["cost_value"]),
         ("Адрес", ["readable_address"]),
         ("Статус", ["status"]),

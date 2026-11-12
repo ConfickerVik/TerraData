@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+
 from app.services.rosreestr_client import RosreestrClient
 from app.services.rosreestr_converter import RosreestrPdfConverter
 
@@ -8,6 +9,7 @@ router = APIRouter(prefix="/rosreestr", tags=["Rosreestr Data"])
 converter = RosreestrPdfConverter()
 client = RosreestrClient(pdf_converter=converter)
 
+
 @router.get("/info")
 async def get_property_info(cad_num: str):
     """
@@ -15,8 +17,11 @@ async def get_property_info(cad_num: str):
     """
     data = await client.get_full_info(cad_num)
     if not data:
-        raise HTTPException(status_code=404, detail="Property information not found or Rosreestr error")
+        raise HTTPException(
+            status_code=404, detail="Property information not found or Rosreestr error"
+        )
     return data
+
 
 @router.get("/search-address")
 async def search_address(address: str = Query(..., description="Full address to search for")):

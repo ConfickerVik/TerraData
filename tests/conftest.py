@@ -1,9 +1,10 @@
 """Общие фикстуры pytest."""
+
 import pytest
 
 from app.core.deps import require_admin, require_auth
-from main import app
 from app.models import User
+from main import app
 
 # Заглушка для legacy-интеграционных тестов, которым не нужна реальная авторизация.
 _stub_user = User(

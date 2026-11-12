@@ -1,26 +1,27 @@
 import os
-import uuid
 import threading
+import uuid
+
 import httpx
 import numpy as np
+import pdfkit
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-import pdfkit
-from typing import Optional, Dict, Any
+
 
 class RosreestrPdfConverter:
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: str | None = None):
         if model_path is None:
             # Path relative to the project root: app/models/pred.keras
             # This file is in app/services/, so we go up two levels to reach root
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            model_path = os.path.join(base_dir, 'app', 'models', 'pred.keras')
-        
+            model_path = os.path.join(base_dir, "app", "models", "pred.keras")
+
         self.max_tries = 20
         self.sessions = {}
         self.sessions_lock = threading.Lock()
-        
+
         # Load Model
         try:
             self.model = keras.models.load_model(model_path)
@@ -30,9 +31,42 @@ class RosreestrPdfConverter:
             self.model = None
 
         # OCR Characters
-        self.characters = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'а', 'б', 'в', 'г', 'д', 'е', 'и', 'к', 'л', 'м', 'н', 'п', 'р', 'с', 'т', 'у', 'ф', 'х', 'ч', 'э', 'я']
+        self.characters = [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "а",
+            "б",
+            "в",
+            "г",
+            "д",
+            "е",
+            "и",
+            "к",
+            "л",
+            "м",
+            "н",
+            "п",
+            "р",
+            "с",
+            "т",
+            "у",
+            "ф",
+            "х",
+            "ч",
+            "э",
+            "я",
+        ]
         self.char_to_num = layers.StringLookup(vocabulary=list(self.characters), mask_token=None)
-        self.num_to_char = layers.StringLookup(vocabulary=self.char_to_num.get_vocabulary(), mask_token=None, invert=True)
+        self.num_to_char = layers.StringLookup(
+            vocabulary=self.char_to_num.get_vocabulary(), mask_token=None, invert=True
+        )
 
     def _encode_single_sample(self, img_path):
         img = tf.io.read_file(img_path)
@@ -50,14 +84,14 @@ class RosreestrPdfConverter:
             output_text.append(res_text)
         return output_text
 
-    def solve_captcha(self, captcha_path: str) -> Optional[str]:
+    def solve_captcha(self, captcha_path: str) -> str | None:
         if self.model is None:
             return None
-        
+
         try:
             dataset = tf.data.Dataset.from_tensor_slices([captcha_path])
             dataset = dataset.map(self._encode_single_sample).batch(1)
-            
+
             for batch in dataset.take(1):
                 preds = self.model.predict(batch["image"], verbose=0)
                 pred_texts = self._decode_batch_predictions(preds)
@@ -77,7 +111,7 @@ class RosreestrPdfConverter:
         session = httpx.Client(verify=False)
         try:
             statement_guid = str(uuid.uuid4())
-            
+
             # 1. Solve Captcha & Upload
             captcha_solved = False
             for i in range(self.max_tries):
@@ -86,15 +120,20 @@ class RosreestrPdfConverter:
                     captcha_path = f"captcha_{statement_guid}.png"
                     with open(captcha_path, "wb") as f:
                         f.write(resp.content)
-                    
+
                     captcha_text = self.solve_captcha(captcha_path)
-                    if not captcha_text: continue
+                    if not captcha_text:
+                        continue
 
                     payload = {"statementGuid": statement_guid, "captcha": captcha_text}
-                    with open(temp_xml_path, 'rb') as f:
-                        files = {'file': f}
-                        upload_resp = session.post("https://lk.rosreestr.ru/account-back/check-doc/uploadFile", data=payload, files=files)
-                        
+                    with open(temp_xml_path, "rb") as f:
+                        files = {"file": f}
+                        upload_resp = session.post(
+                            "https://lk.rosreestr.ru/account-back/check-doc/uploadFile",
+                            data=payload,
+                            files=files,
+                        )
+
                     if upload_resp.status_code == 200:
                         captcha_solved = True
                         os.remove(captcha_path)
@@ -114,10 +153,12 @@ class RosreestrPdfConverter:
                 "sigFile": "",
                 "justSignatureCheck": False,
             }
-            
+
             for i in range(self.max_tries):
                 try:
-                    check_resp = session.post("https://lk.rosreestr.ru/account-back/check-doc/check", json=payload)
+                    check_resp = session.post(
+                        "https://lk.rosreestr.ru/account-back/check-doc/check", json=payload
+                    )
                     if check_resp.status_code == 200:
                         if check_resp.json().get("transformStatus") == "ERROR":
                             raise Exception("Rosreestr transform error")
@@ -133,7 +174,9 @@ class RosreestrPdfConverter:
             html_content = None
             for i in range(self.max_tries):
                 try:
-                    view_resp = session.get(f"https://lk.rosreestr.ru/account-back/check-doc/view/{statement_guid}")
+                    view_resp = session.get(
+                        f"https://lk.rosreestr.ru/account-back/check-doc/view/{statement_guid}"
+                    )
                     if view_resp.status_code == 200:
                         html_content = view_resp.text
                         break
@@ -145,14 +188,18 @@ class RosreestrPdfConverter:
 
             # 4. PDF conversion
             pdf_bytes = pdfkit.from_string(html_content, False)
-            
+
             # Cleanup Rosreestr side
             try:
-                session.delete(f"https://lk.rosreestr.ru/account-back/check-doc/delete/{statement_guid}")
-                session.delete(f"https://lk.rosreestr.ru/account-back/check-doc/delete-sig/{statement_guid}")
-            except:
+                session.delete(
+                    f"https://lk.rosreestr.ru/account-back/check-doc/delete/{statement_guid}"
+                )
+                session.delete(
+                    f"https://lk.rosreestr.ru/account-back/check-doc/delete-sig/{statement_guid}"
+                )
+            except Exception:
                 pass
-                
+
             return pdf_bytes
 
         finally:

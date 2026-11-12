@@ -1,10 +1,9 @@
-import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
-from app.services.rosreestr_client import RosreestrClient
-from app.services.nspd_client import NspdClient
 from app.services.fias_client import FIASClient
+from app.services.nspd_client import NspdClient
+from app.services.rosreestr_client import RosreestrClient
 from app.services.sudrf_client import SudrfClient
 
 logger = logging.getLogger(__name__)
@@ -25,10 +24,10 @@ class ReportService:
 
     def __init__(
         self,
-        rosreestr_client: Optional[RosreestrClient] = None,
-        nspd_client: Optional[NspdClient] = None,
-        fias_client: Optional[FIASClient] = None,
-        sudrf_client: Optional[SudrfClient] = None,
+        rosreestr_client: RosreestrClient | None = None,
+        nspd_client: NspdClient | None = None,
+        fias_client: FIASClient | None = None,
+        sudrf_client: SudrfClient | None = None,
     ):
         self.rosreestr = rosreestr_client or RosreestrClient()
         self.nspd = nspd_client or NspdClient()
@@ -41,7 +40,7 @@ class ReportService:
         include_nspd: bool = True,
         include_fias: bool = True,
         include_sudrf: bool = True,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Собирает нормализованную структуру отчёта по кадастровому номеру.
 
@@ -67,7 +66,7 @@ class ReportService:
 
         return self._build_report(cad_num, obj, nspd_data, fias_data, sudrf_data)
 
-    async def _collect_nspd(self, cad_num: str) -> Optional[Dict[str, Any]]:
+    async def _collect_nspd(self, cad_num: str) -> dict[str, Any] | None:
         """Собирает данные НСПД (база + геометрия + вкладки). Ошибки -> None."""
         try:
             base_info = await self.nspd.get_property_cadastral_price(cad_num)
@@ -80,6 +79,7 @@ class ReportService:
                 raw_geom = feature.get("geometry")
                 if raw_geom:
                     from app.services.coords_converter import CoordsConverter
+
                     geometry = CoordsConverter.convert_geometry(raw_geom)
             except (KeyError, IndexError):
                 geometry = None
@@ -101,7 +101,7 @@ class ReportService:
             logger.error(f"NSPD collection error for {cad_num}: {e}")
             return None
 
-    async def _collect_fias(self, cad_num: str) -> Optional[Dict[str, Any]]:
+    async def _collect_fias(self, cad_num: str) -> dict[str, Any] | None:
         """Собирает данные ФИАС. Ошибки -> None."""
         try:
             data = await self.fias.search_fias_by_cadastral(cad_num)
@@ -110,7 +110,7 @@ class ReportService:
             logger.error(f"FIAS collection error for {cad_num}: {e}")
             return None
 
-    async def _collect_sudrf(self, cad_num: str, include_fias: bool) -> Optional[Dict[str, Any]]:
+    async def _collect_sudrf(self, cad_num: str, include_fias: bool) -> dict[str, Any] | None:
         """
         Собирает данные СУДРФ (судебный участок).
 
@@ -132,10 +132,13 @@ class ReportService:
 
             # Fallback по адресу
             from app.services.address_cleaner import AddressCleaner
+
             try:
                 full_name = fias_data.get("addresses", [{}])[0].get("full_name")
                 cleaned = AddressCleaner.clean(full_name)
-                fallback_guid = await self.sudrf.get_fias_id_by_address(cleaned) if cleaned else None
+                fallback_guid = (
+                    await self.sudrf.get_fias_id_by_address(cleaned) if cleaned else None
+                )
                 if fallback_guid:
                     return await self.sudrf.get_court_by_fias_id(fallback_guid)
             except (KeyError, IndexError):
@@ -147,7 +150,7 @@ class ReportService:
             return None
 
     @staticmethod
-    def _extract_house_guid(fias_data: Dict[str, Any]) -> Optional[str]:
+    def _extract_house_guid(fias_data: dict[str, Any]) -> str | None:
         """Извлекает GUID дома из иерархии адреса ФИАС."""
         try:
             hierarchy = fias_data.get("addresses", [{}])[0].get("hierarchy", [])
@@ -161,11 +164,11 @@ class ReportService:
     @staticmethod
     def _build_report(
         cad_num: str,
-        obj: Dict[str, Any],
-        nspd_data: Optional[Dict[str, Any]],
-        fias_data: Optional[Dict[str, Any]],
-        sudrf_data: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        obj: dict[str, Any],
+        nspd_data: dict[str, Any] | None,
+        fias_data: dict[str, Any] | None,
+        sudrf_data: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         """Собирает финальную нормализованную структуру отчёта."""
         address = obj.get("address", {}) or {}
         return {
@@ -186,7 +189,7 @@ class ReportService:
                 "cad_cost": obj.get("cadCost"),
                 "cad_cost_date": obj.get("cadCostDeterminationDate"),
                 "reg_date": obj.get("regDate"),
-                "info_update_date" : obj.get("infoUpdateDate")
+                "info_update_date": obj.get("infoUpdateDate"),
             },
             "spatial": nspd_data,
             "legal": {
@@ -197,9 +200,8 @@ class ReportService:
             "court": sudrf_data,
         }
 
-
     @staticmethod
-    def _extract_area_unit(obj: Dict[str, Any]) -> str:
+    def _extract_area_unit(obj: dict[str, Any]) -> str:
         """Извлекает единицу измерения площади из mainCharacters."""
         try:
             chars = obj.get("mainCharacters", [])

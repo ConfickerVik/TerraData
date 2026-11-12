@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from app.api import analytics, admin, auth, converter, fias, nspd, rosreestr, sudrf
+from app.api import admin, analytics, auth, converter, fias, nspd, rosreestr, sudrf
 from app.core.database import async_session
 from app.core.deps import require_auth
 from app.services import auth_service
@@ -61,11 +61,12 @@ async def root():
 
 
 if __name__ == "__main__":
-    import uvicorn
     from pathlib import Path
 
-    from alembic import command
+    import uvicorn
     from alembic.config import Config
+
+    from alembic import command
 
     # Применяем миграции БД перед стартом сервера
     base_dir = Path(__file__).resolve().parent
