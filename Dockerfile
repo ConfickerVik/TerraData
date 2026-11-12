@@ -35,5 +35,5 @@ RUN mkdir -p /app/data
 # Экспонируем порт FastAPI
 EXPOSE 8000
 
-# Команда запуска через uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Применяем миграции БД, затем запускаем uvicorn
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]

@@ -25,6 +25,8 @@ def test_root():
         "fias": "/fias",
         "sudrf": "/sudrf",
         "analytics": "/analytics",
+        "auth": "/auth",
+        "admin": "/admin",
     }
 
 
