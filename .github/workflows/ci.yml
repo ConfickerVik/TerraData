@@ -43,10 +43,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
-        # wkhtmltopdf — для pdfkit, libgl1 — для opencv (если появится импорт cv2).
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends wkhtmltopdf libgl1
+          sudo apt-get install -y --no-install-recommends libgl1
 
       - uses: actions/setup-python@v5
         with:

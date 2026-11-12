@@ -46,5 +46,5 @@ greenlet==3.1.1
 alembic==1.14.0
 aiosqlite==0.20.0
 pydantic-settings==2.6.1
-PyJWT==2.9.0
+PyJWT==2.15.1
 pwdlib[argon2]==0.2.1
