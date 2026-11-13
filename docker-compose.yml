@@ -37,6 +37,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
       - DEFAULT_DAILY_QUOTA=${DEFAULT_DAILY_QUOTA:-1000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
     restart: unless-stopped
     ports:
       - "8000:8000"

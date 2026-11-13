@@ -1,4 +1,6 @@
-# TerraData API 🌍
+<p align="center">
+  <img src="docs/assets/TerraData.svg" alt="TerraData" width="480" />
+</p>
 
 TerraData — это API-сервис для работы с государственными геоданными и сведениями об объектах недвижимости. Он объединяет взаимодействие с несколькими источниками:
 

@@ -2,8 +2,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import admin, analytics, auth, converter, fias, nspd, rosreestr, sudrf
+from app.core.config import settings
 from app.core.database import async_session
 from app.core.deps import require_auth
 from app.services import auth_service
@@ -27,6 +29,16 @@ app = FastAPI(
     description="API for Rosreestr and NSPD data extraction and XML to PDF conversion",
     version="1.1.0",
     lifespan=lifespan,
+)
+
+# CORS: разрешаем только явно перечисленные origin (см. CORS_ORIGINS в .env).
+# JWT передаётся в заголовке Authorization (не в cookie), поэтому allow_credentials=False.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Публичные маршруты
@@ -74,4 +86,4 @@ if __name__ == "__main__":
     cfg.set_main_option("script_location", str(base_dir / "alembic"))
     command.upgrade(cfg, "head")
 
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
