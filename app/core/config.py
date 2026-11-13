@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # CORS
     # Разрешённые origin через запятую, например:
     # "http://localhost:5173,https://app.example.com"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173, http://localhost:8000"
 
     @property
     def cors_origins_list(self) -> list[str]:
