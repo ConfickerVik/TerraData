@@ -79,9 +79,7 @@ async def get_courts_by_fias(
 
     courts = await sudrf_client.get_courts_by_fias(fias_id)
     if not courts:
-        raise HTTPException(
-            status_code=404, detail="Суды по данному FIAS ID не найдены"
-        )
+        raise HTTPException(status_code=404, detail="Суды по данному FIAS ID не найдены")
 
     return {"courts": courts}
 
