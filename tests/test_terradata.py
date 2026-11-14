@@ -265,6 +265,24 @@ async def test_sudrf_get_court_empty_list(mock_get):
     assert await sudrf.get_court_by_fias_id("some_guid") is None
 
 
+@patch("httpx.AsyncClient.get")
+async def test_sudrf_get_courts_by_fias(mock_get):
+    """Новый метод возвращает отсортированный список всех судов по FIAS ID."""
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.text = (
+        '{"list": [{"VNKOD": "12RS0000", "ZNACHATR": "Районный суд"},'
+        '{"VNKOD": "12MS0000", "ZNACHATR": "Судебный участок №1"}]}'
+    )
+    sudrf = SudrfClient()
+    courts = await sudrf.get_courts_by_fias("some_guid")
+    assert courts is not None
+    assert len(courts) == 2
+    # MS (мировой участок) должен идти первым согласно порядку вывода.
+    assert courts[0]["type"] == "MS"
+    assert courts[0]["name"] == "Судебный участок №1"
+    assert courts[1]["type"] == "RS"
+
+
 @patch("httpx.AsyncClient.post")
 async def test_sudrf_get_fias_id_by_address_success(mock_post):
     mock_post.return_value.status_code = 200
@@ -702,6 +720,31 @@ def test_api_by_object_id_success(mock_get_court, mock_fias):
 
     assert response.status_code == 200
     assert response.json()["court_info"]["court_name"] == "Судебный участок №30"
+
+
+@patch("app.api.sudrf.sudrf_client.get_courts_by_fias", new_callable=AsyncMock)
+def test_api_by_fias_success(mock_get_courts):
+    """Прямой эндпоинт: список судов по FIAS ID (GUID)."""
+    mock_get_courts.return_value = [
+        {"type": "MS", "vncod": "12MS0000", "name": "Судебный участок №40"}
+    ]
+
+    response = client.get("/sudrf/by-fias?fias_id=guid_house")
+
+    assert response.status_code == 200
+    assert response.json()["courts"][0]["name"] == "Судебный участок №40"
+    mock_get_courts.assert_called_once_with("guid_house")
+
+
+@patch("app.api.sudrf.sudrf_client.get_courts_by_fias", new_callable=AsyncMock)
+def test_api_by_fias_not_found(mock_get_courts):
+    """Суды по FIAS ID не найдены -> 404."""
+    mock_get_courts.return_value = None
+
+    response = client.get("/sudrf/by-fias?fias_id=unknown_guid")
+
+    assert response.status_code == 404
+    assert "Суды по данному FIAS ID не найдены" in response.json()["detail"]
 
 
 # =============================================================================

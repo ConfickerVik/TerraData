@@ -113,6 +113,7 @@ docker compose up --build
 | `/sudrf/by-cadastral` | `GET` | Судебный участок по кадастровому номеру |
 | `/sudrf/by-address` | `GET` | Судебный участок по адресу |
 | `/sudrf/by-object-id` | `GET` | Судебный участок по ObjectID ФИАС |
+| `/sudrf/by-fias` | `GET` | Список судов по FIAS ID (GUID) |
 
 ### Аналитические PDF-отчёты
 | Эндпоинт | Метод | Описание |
