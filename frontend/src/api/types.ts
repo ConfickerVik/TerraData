@@ -207,3 +207,78 @@ export interface NspdPropertyResponse {
   details: Record<string, unknown> | null
   message?: string | null
 }
+
+// ==== ФИАС ====
+
+export interface FiasAddressHint {
+  object_id: number | string
+  value: string
+  path: string
+}
+
+export interface FiasHierarchyItem {
+  object_type: string | null
+  name: string | null
+  number: string | null
+  type_name: string | null
+  type_short_name: string | null
+  type_form_code: number | null
+  object_id: number | null
+  object_level_id: number | null
+  object_guid: string | null
+  full_name: string | null
+  full_name_short: string | null
+  kladr_code: string | null
+  hierarchy_place: number | null
+}
+
+export interface FiasAddressDetails {
+  postal_code: string | null
+  ifns_ul: string | null
+  ifns_fl: string | null
+  ifns_tul: string | null
+  ifns_tfl: string | null
+  okato: string | null
+  oktmo: string | null
+  cadastral_number: string | null
+  apart_building: string | null
+  oktmo_budget: string | null
+}
+
+export interface FiasFederalDistrict {
+  id: number | null
+  full_name: string | null
+  short_name: string | null
+  center_id: number | null
+}
+
+export interface FiasAddress {
+  object_id: number | null
+  object_level_id: number | null
+  operation_type_id: number | null
+  object_guid: string | null
+  address_type: number | null
+  full_name: string | null
+  region_code: number | null
+  is_active: boolean | null
+  path: string | null
+  address_details: FiasAddressDetails | null
+  hierarchy: FiasHierarchyItem[]
+  federal_district: FiasFederalDistrict | null
+  hierarchy_place: number | null
+}
+
+export interface FiasObjectDetails {
+  ReesterNumber: string | null
+  StartDate: string | null
+  UpdateDate: string | null
+  NormativeDocument: string | null
+  FederalDistrict: string | null
+  AdminCenterRF: boolean | null
+  AdminCenterMunDistrict: boolean | null
+}
+
+export interface FiasByCadastralResponse {
+  addresses: FiasAddress[]
+  object_details: FiasObjectDetails | null
+}
