@@ -19,6 +19,7 @@
 | `/sudrf/by-cadastral` | `GET` | Судебный участок по кадастровому номеру |
 | `/sudrf/by-address` | `GET` | Судебный участок по адресу |
 | `/sudrf/by-object-id` | `GET` | Судебный участок по ObjectID ФИАС |
+| `/sudrf/by-fias` | `GET` | Список судов по FIAS ID (GUID) |
 
 ## Параметры
 
@@ -27,9 +28,13 @@
 | `cad_num` | `string` | Кадастровый номер (для `/sudrf/by-cadastral`) |
 | `address` | `string` | Адрес (для `/sudrf/by-address`) |
 | `object_id` | `string` | ObjectID ФИАС (для `/sudrf/by-object-id`) |
+| `fias_id` | `string` | FIAS ID (GUID) (для `/sudrf/by-fias`) |
 | `address_type` | `int` | Тип адресации ФИАС: `1` — административное (по умолчанию), `2` — муниципальное |
 
 ## Описание эндпоинтов
+
+### `/sudrf/by-fias`
+Прямой запрос к СУДРФ: `FIAS ID (GUID) → СУДРФ → Список судов`. Возвращает `{ "courts": [...] }`.
 
 ### `/sudrf/by-cadastral`
 Полный цикл: `Кадастровый номер → ФИАС GUID → СУДРФ → Суд`. Возвращает `{ "court_info": ... }`.

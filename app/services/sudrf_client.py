@@ -19,15 +19,13 @@ class SudrfClient:
         self.base_url = "https://sudrf.ru/api.php"
         self.suggest_url = "https://sudrf.ru/suggestions/api/4_1/rs/suggest/address"
 
-    async def get_court_by_fias_id(
-        self, fias_id: str, region_code: str | None = None
-    ) -> dict[str, Any] | None:
+    async def get_courts_by_fias(self, fias_id: str) -> list[dict[str, Any]] | None:
         """
-        Получение списка судов по FIAS ID (GUID).
+        Получение списка судов по FIAS ID (GUID) напрямую из API sudrf.ru.
         Метод: getCourtListByFiasCode.
 
-        Возвращает все суды (мировой участок, районный, областной,
-        апелляционный, кассационный, военные) с их типом и реквизитами.
+        Возвращает отсортированный список всех судов (мировой участок, районный,
+        областной, апелляционный, кассационный, военные) с их типом и реквизитами.
         """
         url = f"{self.base_url}?opt=court_list&action=getCourtListByFiasCode&fiasId={fias_id}"
 
@@ -81,17 +79,32 @@ class SudrfClient:
                 )
             )
 
-            # Основной суд по умолчанию — судебный участок (MS), иначе первый.
-            main_court = next((c for c in courts if c["type"] == "MS"), courts[0])
-
-            return {
-                "court_name": main_court["name"],
-                "vncod": main_court["vncod"],
-                "courts": courts,
-            }
+            return courts
         except Exception as e:
-            logger.error(f"Error getting court by fias_id {fias_id}: {e}")
+            logger.error(f"Error getting courts by fias_id {fias_id}: {e}")
         return None
+
+    async def get_court_by_fias_id(
+        self, fias_id: str, region_code: str | None = None
+    ) -> dict[str, Any] | None:
+        """
+        Получение основного судебного участка по FIAS ID (GUID).
+        Метод: getCourtListByFiasCode.
+
+        Основной суд по умолчанию — судебный участок (MS), иначе первый из списка.
+        """
+        courts = await self.get_courts_by_fias(fias_id)
+        if not courts:
+            return None
+
+        # Основной суд по умолчанию — судебный участок (MS), иначе первый.
+        main_court = next((c for c in courts if c["type"] == "MS"), courts[0])
+
+        return {
+            "court_name": main_court["name"],
+            "vncod": main_court["vncod"],
+            "courts": courts,
+        }
 
     async def get_fias_id_by_address(self, address: str) -> str | None:
         """

@@ -67,6 +67,25 @@ async def _check_resolve(fias_data: dict[str, Any] | None) -> dict[str, Any] | N
     return {"court_info": court_info}
 
 
+@router.get("/by-fias")
+async def get_courts_by_fias(
+    fias_id: str,
+):
+    """
+    Получение списка судов напрямую по FIAS ID (GUID) через СУДРФ.
+    """
+    if not fias_id:
+        raise HTTPException(status_code=400, detail="FIAS ID не может быть пустым")
+
+    courts = await sudrf_client.get_courts_by_fias(fias_id)
+    if not courts:
+        raise HTTPException(
+            status_code=404, detail="Суды по данному FIAS ID не найдены"
+        )
+
+    return {"courts": courts}
+
+
 @router.get("/by-cadastral")
 async def get_court_by_cadastral(
     cad_num: str,
