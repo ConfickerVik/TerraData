@@ -164,3 +164,46 @@ export interface AddressSearchItem {
   actual: boolean | number | string
   type: AddressItemType
 }
+
+// ==== НСПД ====
+
+export interface NspdGeometry {
+  type: string | null
+  coordinates: unknown
+  crs: Record<string, unknown> | null
+}
+
+export interface NspdFeatureProperties {
+  category: number | null
+  categoryName: string | null
+  options: Record<string, unknown> | null
+  descr: string | null
+  externalKey: string | null
+  interactionId: number | null
+  label: string | null
+  cadastralDistrictsCode: number | null
+  subcategory: number | null
+  systemInfo: Record<string, unknown> | null
+}
+
+export interface NspdFeature {
+  id: number | null
+  type: string | null
+  geometry: NspdGeometry | null
+  properties: NspdFeatureProperties | null
+}
+
+export interface NspdCadastralPriceResponse {
+  data: {
+    type: string | null
+    features: NspdFeature[]
+  } | null
+  meta: { totalCount: number | null; categoryId: number | null }[] | null
+}
+
+export interface NspdPropertyResponse {
+  base_info: NspdCadastralPriceResponse | null
+  geometry: Record<string, unknown> | null
+  details: Record<string, unknown> | null
+  message?: string | null
+}
