@@ -1,11 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Card, CardActionArea, CardContent, Grid, Stack, Typography } from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import DescriptionIcon from '@mui/icons-material/Description'
-import MapIcon from '@mui/icons-material/Map'
-import GavelIcon from '@mui/icons-material/Gavel'
-import LocationCityIcon from '@mui/icons-material/LocationCity'
-import AssessmentIcon from '@mui/icons-material/Assessment'
+import { TerradataIcon } from '../shared/icons/TerradataIcon'
 import { useAuth } from '../features/auth/useAuth'
 
 const MODULES = [
@@ -13,37 +8,37 @@ const MODULES = [
     title: 'Росреестр',
     description: 'Сведения об объекте по кадастровому номеру',
     path: '/rosreestr',
-    icon: <SearchIcon />,
+    icon: <TerradataIcon name="search" />,
   },
   {
     title: 'Конвертер XML→PDF',
     description: 'Загрузка XML-выписки и конвертация в PDF',
     path: '/converter',
-    icon: <DescriptionIcon />,
+    icon: <TerradataIcon name="document" />,
   },
   {
     title: 'НСПД',
     description: 'Кадастровая стоимость и геометрия объекта',
     path: '/nspd',
-    icon: <MapIcon />,
+    icon: <TerradataIcon name="folded-map" />,
   },
   {
     title: 'ФИАС',
     description: 'Адресный реестр, ObjectID и сведения об объектах',
     path: '/fias',
-    icon: <LocationCityIcon />,
+    icon: <TerradataIcon name="map-pin" />,
   },
   {
     title: 'СУДРФ',
     description: 'Определение судебного участка',
     path: '/sudrf',
-    icon: <GavelIcon />,
+    icon: <TerradataIcon name="scales" />,
   },
   {
     title: 'Аналитика',
     description: 'Сводный PDF-отчёт по объекту',
     path: '/analytics',
-    icon: <AssessmentIcon />,
+    icon: <TerradataIcon name="chart" />,
   },
 ]
 

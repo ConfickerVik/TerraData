@@ -20,15 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
-import HomeIcon from '@mui/icons-material/Home'
-import SearchIcon from '@mui/icons-material/Search'
-import DescriptionIcon from '@mui/icons-material/Description'
-import MapIcon from '@mui/icons-material/Map'
-import GavelIcon from '@mui/icons-material/Gavel'
-import LocationCityIcon from '@mui/icons-material/LocationCity'
-import AssessmentIcon from '@mui/icons-material/Assessment'
-import KeyIcon from '@mui/icons-material/Key'
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import { TerradataIcon } from '../../shared/icons/TerradataIcon'
 import { useAuth } from '../../features/auth/useAuth'
 
 const DRAWER_WIDTH = 240
@@ -41,15 +33,15 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Главная', path: '/', icon: <HomeIcon /> },
-  { label: 'Росреестр', path: '/rosreestr', icon: <SearchIcon /> },
-  { label: 'Конвертер XML→PDF', path: '/converter', icon: <DescriptionIcon /> },
-  { label: 'НСПД', path: '/nspd', icon: <MapIcon /> },
-  { label: 'ФИАС', path: '/fias', icon: <LocationCityIcon /> },
-  { label: 'СУДРФ', path: '/sudrf', icon: <GavelIcon /> },
-  { label: 'Аналитика', path: '/analytics', icon: <AssessmentIcon /> },
-  { label: 'API-ключи', path: '/api-keys', icon: <KeyIcon /> },
-  { label: 'Админ', path: '/admin', icon: <AdminPanelSettingsIcon />, adminOnly: true },
+  { label: 'Главная', path: '/', icon: <TerradataIcon name="home" /> },
+  { label: 'Росреестр', path: '/rosreestr', icon: <TerradataIcon name="search" /> },
+  { label: 'Конвертер XML→PDF', path: '/converter', icon: <TerradataIcon name="document" /> },
+  { label: 'НСПД', path: '/nspd', icon: <TerradataIcon name="folded-map" /> },
+  { label: 'ФИАС', path: '/fias', icon: <TerradataIcon name="map-pin" /> },
+  { label: 'СУДРФ', path: '/sudrf', icon: <TerradataIcon name="scales" /> },
+  { label: 'Аналитика', path: '/analytics', icon: <TerradataIcon name="chart" /> },
+  { label: 'API-ключи', path: '/api-keys', icon: <TerradataIcon name="shield-check" /> },
+  { label: 'Админ', path: '/admin', icon: <TerradataIcon name="settings" />, adminOnly: true },
 ]
 
 export function AppLayout() {
