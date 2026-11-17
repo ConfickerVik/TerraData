@@ -29,6 +29,12 @@ export interface UserOut {
   created_at: string | null
 }
 
+export interface UserAdminUpdate {
+  role?: string | null
+  is_active?: boolean | null
+  request_limit?: number | null
+}
+
 export interface ApiKeyOut {
   id: number
   name: string
@@ -40,6 +46,10 @@ export interface ApiKeyOut {
 
 export interface ApiKeyCreated extends ApiKeyOut {
   key: string
+}
+
+export interface ApiKeyAdminOut extends ApiKeyOut {
+  user_id: number
 }
 
 export interface ApiKeyCreate {
