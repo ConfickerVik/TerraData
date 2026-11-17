@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Accordion,
   AccordionDetails,
@@ -308,8 +309,9 @@ function AddressResult({
 }
 
 export function RosreestrPage() {
+  const [searchParams] = useSearchParams()
   const [searchType, setSearchType] = useState<SearchType>('cadastral')
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(() => searchParams.get('cad_num') ?? '')
   const [selectedCadNum, setSelectedCadNum] = useState<string | null>(null)
 
   const cadastralMutation = useMutation<RosreestrInfoResponse, ApiError, string>({
@@ -325,6 +327,15 @@ export function RosreestrPage() {
     queryFn: () => getPropertyInfo(selectedCadNum as string),
     enabled: !!selectedCadNum,
   })
+
+  // Автопоиск при переходе с главной (быстрый поиск: /rosreestr?cad_num=...)
+  useEffect(() => {
+    const cadNum = searchParams.get('cad_num')
+    if (cadNum && cadNum.trim()) {
+      cadastralMutation.mutate(cadNum.trim())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const isCadastral = searchType === 'cadastral'
   const isPending = isCadastral ? cadastralMutation.isPending : addressMutation.isPending
