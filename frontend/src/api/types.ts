@@ -282,3 +282,32 @@ export interface FiasByCadastralResponse {
   addresses: FiasAddress[]
   object_details: FiasObjectDetails | null
 }
+
+// ==== СУДРФ ====
+
+export interface SudrfCourt {
+  type: string
+  vncod: string
+  name: string
+  address: string
+  url: string
+}
+
+export interface SudrfCourtInfo {
+  court_name: string | null
+  vncod: string | null
+  courts: SudrfCourt[]
+}
+
+export interface SudrfCourtsResponse {
+  courts: SudrfCourt[]
+}
+
+export interface SudrfCourtInfoResponse {
+  court_info: SudrfCourtInfo | null
+}
+
+export interface SudrfObjectIdResponse {
+  fias_data: unknown | null
+  court_info: SudrfCourtInfo | null
+}
